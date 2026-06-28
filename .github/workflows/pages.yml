@@ -36,7 +36,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build web app
-        run: pnpm exec expo export --platform web
+        run: pnpm run build:web
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
