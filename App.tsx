@@ -6,6 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Modal,
   Platform,
   Pressable,
   SafeAreaView,
@@ -1240,24 +1241,32 @@ function SelectField({
         <Text style={[styles.selectText, !value && styles.selectPlaceholder]}>{value || placeholder}</Text>
         <Text style={styles.selectArrow}>{open ? "▲" : "▼"}</Text>
       </Pressable>
-      {open && !disabled && (
-        <View style={styles.selectMenu}>
-          <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={styles.selectScroll}>
-            {options.map((option) => (
-              <Pressable
-                key={option}
-                onPress={() => {
-                  onSelect(option);
-                  closePicker();
-                }}
-                style={[styles.selectOption, value === option && styles.selectOptionActive]}
-              >
-                <Text style={[styles.selectOptionText, value === option && styles.selectOptionTextActive]}>{option}</Text>
+      <Modal visible={open && !disabled} transparent animationType="fade" onRequestClose={closePicker}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.pickerSheet}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>{label}</Text>
+              <Pressable onPress={closePicker} style={styles.modalCloseButton}>
+                <Text style={styles.modalCloseText}>閉じる</Text>
               </Pressable>
-            ))}
-          </ScrollView>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" style={styles.modalScroll}>
+              {options.map((option) => (
+                <Pressable
+                  key={option}
+                  onPress={() => {
+                    onSelect(option);
+                    closePicker();
+                  }}
+                  style={[styles.selectOption, value === option && styles.selectOptionActive]}
+                >
+                  <Text style={[styles.selectOptionText, value === option && styles.selectOptionTextActive]}>{option}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
         </View>
-      )}
+      </Modal>
     </View>
   );
 }
@@ -1299,43 +1308,53 @@ function CalendarField({
         <Text style={[styles.selectText, !value && styles.selectPlaceholder]}>{value || "カレンダーから選択"}</Text>
         <Text style={styles.selectArrow}>{open ? "▲" : "▼"}</Text>
       </Pressable>
-      {open && (
-        <View style={styles.calendarBox}>
-          <View style={styles.calendarHeader}>
-            <Pressable style={styles.calendarNav} onPress={() => setVisibleMonth((current) => addMonths(current, -1))}>
-              <Text style={styles.calendarNavText}>前月</Text>
-            </Pressable>
-            <Text style={styles.calendarTitle}>{monthLabel}</Text>
-            <Pressable style={styles.calendarNav} onPress={() => setVisibleMonth((current) => addMonths(current, 1))}>
-              <Text style={styles.calendarNavText}>翌月</Text>
-            </Pressable>
-          </View>
-          <View style={styles.weekRow}>
-            {["日", "月", "火", "水", "木", "金", "土"].map((day) => (
-              <Text key={day} style={styles.weekText}>{day}</Text>
-            ))}
-          </View>
-          <View style={styles.calendarGrid}>
-            {dates.map((date) => {
-              const formatted = formatDateValue(date);
-              const inMonth = date.getMonth() === visibleMonth.getMonth();
-              const active = selected ? formatted === formatDateValue(selected) : false;
-              return (
-                <Pressable
-                  key={formatted}
-                  onPress={() => {
-                    onSelect(formatted);
-                    closePicker();
-                  }}
-                  style={[styles.dayCell, active && styles.dayCellActive]}
-                >
-                  <Text style={[styles.dayText, !inMonth && styles.dayTextMuted, active && styles.dayTextActive]}>{date.getDate()}</Text>
+      <Modal visible={open} transparent animationType="fade" onRequestClose={closePicker}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.pickerSheet}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>{label}</Text>
+              <Pressable onPress={closePicker} style={styles.modalCloseButton}>
+                <Text style={styles.modalCloseText}>閉じる</Text>
+              </Pressable>
+            </View>
+            <View style={styles.calendarBox}>
+              <View style={styles.calendarHeader}>
+                <Pressable style={styles.calendarNav} onPress={() => setVisibleMonth((current) => addMonths(current, -1))}>
+                  <Text style={styles.calendarNavText}>前月</Text>
                 </Pressable>
-              );
-            })}
+                <Text style={styles.calendarTitle}>{monthLabel}</Text>
+                <Pressable style={styles.calendarNav} onPress={() => setVisibleMonth((current) => addMonths(current, 1))}>
+                  <Text style={styles.calendarNavText}>翌月</Text>
+                </Pressable>
+              </View>
+              <View style={styles.weekRow}>
+                {["日", "月", "火", "水", "木", "金", "土"].map((day) => (
+                  <Text key={day} style={styles.weekText}>{day}</Text>
+                ))}
+              </View>
+              <View style={styles.calendarGrid}>
+                {dates.map((date) => {
+                  const formatted = formatDateValue(date);
+                  const inMonth = date.getMonth() === visibleMonth.getMonth();
+                  const active = selected ? formatted === formatDateValue(selected) : false;
+                  return (
+                    <Pressable
+                      key={formatted}
+                      onPress={() => {
+                        onSelect(formatted);
+                        closePicker();
+                      }}
+                      style={[styles.dayCell, active && styles.dayCellActive]}
+                    >
+                      <Text style={[styles.dayText, !inMonth && styles.dayTextMuted, active && styles.dayTextActive]}>{date.getDate()}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
           </View>
         </View>
-      )}
+      </Modal>
     </View>
   );
 }
@@ -1538,16 +1557,23 @@ const styles = StyleSheet.create({
   selectText: { color: "#263238", fontSize: 15, fontWeight: "700", flex: 1 },
   selectPlaceholder: { color: "#8d948e", fontWeight: "600" },
   selectArrow: { color: "#64736a", fontSize: 12, fontWeight: "800" },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(38,50,56,0.35)", justifyContent: "center", padding: 18 },
+  pickerSheet: { maxHeight: "82%", backgroundColor: "#fffdf8", borderRadius: 8, borderWidth: 1, borderColor: "#e2ded2", overflow: "hidden" },
+  pickerHeader: { minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: "#e2ded2", backgroundColor: "#f6f3ee" },
+  pickerTitle: { flex: 1, color: "#263238", fontSize: 16, fontWeight: "900" },
+  modalCloseButton: { minHeight: 36, borderRadius: 8, backgroundColor: "#e6eee8", alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
+  modalCloseText: { color: "#176b51", fontSize: 13, fontWeight: "900" },
+  modalScroll: { maxHeight: 420 },
   selectMenu: { backgroundColor: "#ffffff", borderColor: "#d8d7cd", borderWidth: 1, borderRadius: 8, marginTop: 6, height: 220, overflow: "hidden" },
   selectScroll: { height: 220 },
-  selectOption: { minHeight: 40, justifyContent: "center", paddingHorizontal: 12, borderBottomColor: "#ece9df", borderBottomWidth: 1 },
+  selectOption: { minHeight: 46, justifyContent: "center", paddingHorizontal: 14, borderBottomColor: "#ece9df", borderBottomWidth: 1 },
   selectOptionActive: { backgroundColor: "#e4eee7" },
   selectOptionText: { color: "#33423b", fontSize: 14, fontWeight: "700" },
   selectOptionTextActive: { color: "#176b51" },
   twoColumn: { flexDirection: "row", gap: 10 },
   limitSummary: { backgroundColor: "#f0f5ef", borderRadius: 8, padding: 12, marginBottom: 10, gap: 4 },
   limitText: { color: "#31423b", fontSize: 13, fontWeight: "800" },
-  calendarBox: { backgroundColor: "#ffffff", borderColor: "#d8d7cd", borderWidth: 1, borderRadius: 8, marginTop: 6, padding: 10 },
+  calendarBox: { backgroundColor: "#ffffff", padding: 12 },
   calendarHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
   calendarNav: { minHeight: 34, minWidth: 58, borderRadius: 8, backgroundColor: "#e6eee8", alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
   calendarNavText: { color: "#176b51", fontSize: 12, fontWeight: "800" },
