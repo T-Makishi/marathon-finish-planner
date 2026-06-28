@@ -20,6 +20,8 @@ type Race = {
   id: string;
   name: string;
   location: string;
+  prefecture?: string;
+  municipality?: string;
   date: string;
   category: string;
   distanceKm: string;
@@ -111,6 +113,8 @@ const emptyRace: Race = {
   id: "",
   name: "",
   location: "",
+  prefecture: "",
+  municipality: "",
   date: "",
   category: "フルマラソン",
   distanceKm: "42.195",
@@ -124,6 +128,67 @@ const emptySegment: ElevationSegment = { id: "", raceId: "", startKm: "", endKm:
 const emptyPlan: Plan = { id: "", raceId: "", targetTime: "05:30:00", paceType: "イーブンペース", gateBufferMin: "10" };
 const emptyPb: PBRecord = { id: "", event: "フル", raceName: "", date: "", time: "", memo: "" };
 const emptyPast: PastRace = { id: "", raceName: "", year: "", category: "フル", finishTime: "", weather: "", temperature: "", humidity: "" };
+
+const PREFECTURE_MUNICIPALITIES: Record<string, string[]> = {
+  北海道: ["札幌市", "函館市", "旭川市", "釧路市", "帯広市", "北見市"],
+  青森県: ["青森市", "弘前市", "八戸市", "十和田市", "むつ市"],
+  岩手県: ["盛岡市", "花巻市", "北上市", "一関市", "奥州市"],
+  宮城県: ["仙台市", "石巻市", "塩竈市", "名取市", "大崎市"],
+  秋田県: ["秋田市", "横手市", "大館市", "由利本荘市", "大仙市"],
+  山形県: ["山形市", "米沢市", "鶴岡市", "酒田市", "天童市"],
+  福島県: ["福島市", "会津若松市", "郡山市", "いわき市", "白河市"],
+  茨城県: ["水戸市", "日立市", "土浦市", "つくば市", "ひたちなか市"],
+  栃木県: ["宇都宮市", "足利市", "栃木市", "佐野市", "小山市"],
+  群馬県: ["前橋市", "高崎市", "桐生市", "伊勢崎市", "太田市"],
+  埼玉県: ["さいたま市", "川越市", "熊谷市", "川口市", "所沢市"],
+  千葉県: ["千葉市", "市川市", "船橋市", "松戸市", "柏市"],
+  東京都: ["千代田区", "中央区", "港区", "新宿区", "渋谷区", "世田谷区", "八王子市", "立川市"],
+  神奈川県: ["横浜市", "川崎市", "相模原市", "藤沢市", "小田原市"],
+  新潟県: ["新潟市", "長岡市", "三条市", "柏崎市", "上越市"],
+  富山県: ["富山市", "高岡市", "魚津市", "氷見市", "砺波市"],
+  石川県: ["金沢市", "七尾市", "小松市", "加賀市", "白山市"],
+  福井県: ["福井市", "敦賀市", "小浜市", "鯖江市", "越前市"],
+  山梨県: ["甲府市", "富士吉田市", "都留市", "山梨市", "笛吹市"],
+  長野県: ["長野市", "松本市", "上田市", "飯田市", "諏訪市"],
+  岐阜県: ["岐阜市", "大垣市", "高山市", "多治見市", "各務原市"],
+  静岡県: ["静岡市", "浜松市", "沼津市", "富士市", "磐田市"],
+  愛知県: ["名古屋市", "豊橋市", "岡崎市", "一宮市", "豊田市"],
+  三重県: ["津市", "四日市市", "伊勢市", "松阪市", "鈴鹿市"],
+  滋賀県: ["大津市", "彦根市", "長浜市", "草津市", "東近江市"],
+  京都府: ["京都市", "宇治市", "亀岡市", "舞鶴市", "福知山市"],
+  大阪府: ["大阪市", "堺市", "岸和田市", "豊中市", "枚方市"],
+  兵庫県: ["神戸市", "姫路市", "尼崎市", "明石市", "西宮市"],
+  奈良県: ["奈良市", "大和高田市", "大和郡山市", "橿原市", "生駒市"],
+  和歌山県: ["和歌山市", "海南市", "橋本市", "田辺市", "新宮市"],
+  鳥取県: ["鳥取市", "米子市", "倉吉市", "境港市"],
+  島根県: ["松江市", "浜田市", "出雲市", "益田市", "大田市"],
+  岡山県: ["岡山市", "倉敷市", "津山市", "玉野市", "総社市"],
+  広島県: ["広島市", "呉市", "福山市", "尾道市", "東広島市"],
+  山口県: ["山口市", "下関市", "宇部市", "萩市", "岩国市"],
+  徳島県: ["徳島市", "鳴門市", "小松島市", "阿南市", "吉野川市"],
+  香川県: ["高松市", "丸亀市", "坂出市", "善通寺市", "観音寺市"],
+  愛媛県: ["松山市", "今治市", "宇和島市", "新居浜市", "西条市"],
+  高知県: ["高知市", "室戸市", "安芸市", "南国市", "四万十市"],
+  福岡県: ["福岡市", "北九州市", "久留米市", "飯塚市", "糸島市"],
+  佐賀県: ["佐賀市", "唐津市", "鳥栖市", "多久市", "伊万里市"],
+  長崎県: ["長崎市", "佐世保市", "島原市", "諫早市", "大村市"],
+  熊本県: ["熊本市", "八代市", "人吉市", "荒尾市", "天草市"],
+  大分県: ["大分市", "別府市", "中津市", "日田市", "佐伯市"],
+  宮崎県: ["宮崎市", "都城市", "延岡市", "日南市", "小林市"],
+  鹿児島県: ["鹿児島市", "鹿屋市", "枕崎市", "薩摩川内市", "霧島市"],
+  沖縄県: ["那覇市", "宜野湾市", "石垣市", "浦添市", "名護市"]
+};
+
+const PREFECTURES = Object.keys(PREFECTURE_MUNICIPALITIES);
+const RACE_CATEGORIES = ["フルマラソン", "ハーフマラソン", "10km", "5km", "ウルトラマラソン", "その他"];
+const CATEGORY_DISTANCE: Record<string, string> = {
+  フルマラソン: "42.195",
+  ハーフマラソン: "21.0975",
+  "10km": "10",
+  "5km": "5",
+  ウルトラマラソン: "100"
+};
+const MINUTE_OPTIONS = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
 
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const n = (value: string, fallback = 0) => {
@@ -170,6 +235,51 @@ function formatClockFromStart(startTime: string, cumulativeSec: number): string 
   const h = Math.floor(dayMinutes / 60);
   const m = dayMinutes % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function parseLocationParts(race: Race) {
+  if (race.prefecture || race.municipality) {
+    return { prefecture: race.prefecture ?? "", municipality: race.municipality ?? "" };
+  }
+  const prefecture = PREFECTURES.find((candidate) => race.location.includes(candidate)) ?? "";
+  const municipality = prefecture
+    ? PREFECTURE_MUNICIPALITIES[prefecture].find((candidate) => race.location.includes(candidate)) ?? ""
+    : "";
+  return { prefecture, municipality };
+}
+
+function normalizeRaceForm(race: Race): Race {
+  const locationParts = parseLocationParts(race);
+  return { ...race, ...locationParts };
+}
+
+function combineLocation(prefecture?: string, municipality?: string, fallback?: string) {
+  return [prefecture, municipality].filter(Boolean).join(" ") || fallback || "";
+}
+
+function parseDateValue(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return new Date();
+  return new Date(year, month - 1, day);
+}
+
+function formatDateValue(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function addMonths(date: Date, amount: number) {
+  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
+}
+
+function buildCalendarDates(monthDate: Date) {
+  const first = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const start = new Date(first);
+  start.setDate(first.getDate() - first.getDay());
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return date;
+  });
 }
 
 function statusFromMargin(sec?: number): StatusLabel {
@@ -246,7 +356,9 @@ function createInitialStore(): Store {
         ...emptyRace,
         id: sampleRaceId,
         name: "サンプルマラソン",
-        location: "東京都",
+        location: "東京都 新宿区",
+        prefecture: "東京都",
+        municipality: "新宿区",
         date: "2026-10-25",
         memo: "大会情報は手入力で管理"
       }
@@ -319,7 +431,7 @@ export default function App() {
   function saveRace() {
     if (!raceForm.name.trim()) return Alert.alert("入力不足", "大会名を入力してください。");
     const id = raceForm.id || uid();
-    const nextRace = { ...raceForm, id };
+    const nextRace = { ...raceForm, id, location: combineLocation(raceForm.prefecture, raceForm.municipality, raceForm.location) };
     const exists = store.races.some((race) => race.id === id);
     updateStore({
       ...store,
@@ -519,18 +631,36 @@ export default function App() {
             <Card>
               <Text style={styles.sectionTitle}>{raceForm.id ? "大会を編集" : "大会登録"}</Text>
               <Input label="大会名" value={raceForm.name} onChangeText={(v) => setField(setRaceForm, "name", v)} />
-              <Input label="開催地" value={raceForm.location} onChangeText={(v) => setField(setRaceForm, "location", v)} />
-              <Input label="大会日" value={raceForm.date} onChangeText={(v) => setField(setRaceForm, "date", v)} placeholder="2026-10-25" />
-              <Input label="種目" value={raceForm.category} onChangeText={(v) => setField(setRaceForm, "category", v)} />
+              <SelectField
+                label="都道府県"
+                value={raceForm.prefecture ?? ""}
+                placeholder="都道府県を選択"
+                options={PREFECTURES}
+                onSelect={(value) => setRaceForm((prev) => ({ ...prev, prefecture: value, municipality: "", location: combineLocation(value, "", prev.location) }))}
+              />
+              <SelectField
+                label="市町村"
+                value={raceForm.municipality ?? ""}
+                placeholder={raceForm.prefecture ? "市町村を選択" : "先に都道府県を選択"}
+                options={raceForm.prefecture ? PREFECTURE_MUNICIPALITIES[raceForm.prefecture] ?? [] : []}
+                onSelect={(value) => setRaceForm((prev) => ({ ...prev, municipality: value, location: combineLocation(prev.prefecture, value, prev.location) }))}
+              />
+              <CalendarField label="大会日" value={raceForm.date} onSelect={(value) => setField(setRaceForm, "date", value)} />
+              <SelectField
+                label="種目"
+                value={raceForm.category}
+                options={RACE_CATEGORIES}
+                onSelect={(value) => setRaceForm((prev) => ({ ...prev, category: value, distanceKm: CATEGORY_DISTANCE[value] ?? prev.distanceKm }))}
+              />
               <Input label="距離 km" value={raceForm.distanceKm} onChangeText={(v) => setField(setRaceForm, "distanceKm", v)} keyboardType="decimal-pad" />
-              <Input label="スタート時刻" value={raceForm.startTime} onChangeText={(v) => setField(setRaceForm, "startTime", v)} placeholder="09:00" />
-              <Input label="制限時間" value={raceForm.limitTime} onChangeText={(v) => setField(setRaceForm, "limitTime", v)} placeholder="07:00" />
+              <TimeSelectField label="スタート時刻" value={raceForm.startTime} onSelect={(value) => setField(setRaceForm, "startTime", value)} />
+              <DurationSelectField label="制限時間" value={raceForm.limitTime} onSelect={(value) => setField(setRaceForm, "limitTime", value)} />
               <Input label="公式サイトURL" value={raceForm.officialUrl} onChangeText={(v) => setField(setRaceForm, "officialUrl", v)} />
               <Input label="メモ" value={raceForm.memo} onChangeText={(v) => setField(setRaceForm, "memo", v)} multiline />
               <PrimaryButton label={raceForm.id ? "更新する" : "保存する"} onPress={saveRace} />
             </Card>
             {store.races.map((race) => (
-              <ListCard key={race.id} title={race.name} subtitle={`${race.date} / ${race.distanceKm}km / ${race.startTime}開始`} onEdit={() => setRaceForm(race)} onDelete={() => deleteRace(race.id)} />
+              <ListCard key={race.id} title={race.name} subtitle={`${race.date} / ${race.distanceKm}km / ${race.startTime}開始`} onEdit={() => setRaceForm(normalizeRaceForm(race))} onDelete={() => deleteRace(race.id)} />
             ))}
           </>
         )}
@@ -732,6 +862,134 @@ function Input(props: React.ComponentProps<typeof TextInput> & { label: string }
   );
 }
 
+function SelectField({
+  label,
+  value,
+  options,
+  onSelect,
+  placeholder = "選択してください"
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onSelect: (value: string) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const disabled = options.length === 0;
+
+  return (
+    <View style={styles.inputWrap}>
+      <Text style={styles.label}>{label}</Text>
+      <Pressable disabled={disabled} onPress={() => setOpen((current) => !current)} style={[styles.selectButton, disabled && styles.selectButtonDisabled]}>
+        <Text style={[styles.selectText, !value && styles.selectPlaceholder]}>{value || placeholder}</Text>
+        <Text style={styles.selectArrow}>{open ? "▲" : "▼"}</Text>
+      </Pressable>
+      {open && !disabled && (
+        <View style={styles.selectMenu}>
+          {options.map((option) => (
+            <Pressable
+              key={option}
+              onPress={() => {
+                onSelect(option);
+                setOpen(false);
+              }}
+              style={[styles.selectOption, value === option && styles.selectOptionActive]}
+            >
+              <Text style={[styles.selectOptionText, value === option && styles.selectOptionTextActive]}>{option}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function CalendarField({ label, value, onSelect }: { label: string; value: string; onSelect: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [visibleMonth, setVisibleMonth] = useState(() => parseDateValue(value));
+  const dates = buildCalendarDates(visibleMonth);
+  const selected = value ? parseDateValue(value) : null;
+  const monthLabel = `${visibleMonth.getFullYear()}年 ${visibleMonth.getMonth() + 1}月`;
+
+  return (
+    <View style={styles.inputWrap}>
+      <Text style={styles.label}>{label}</Text>
+      <Pressable onPress={() => setOpen((current) => !current)} style={styles.selectButton}>
+        <Text style={[styles.selectText, !value && styles.selectPlaceholder]}>{value || "カレンダーから選択"}</Text>
+        <Text style={styles.selectArrow}>{open ? "▲" : "▼"}</Text>
+      </Pressable>
+      {open && (
+        <View style={styles.calendarBox}>
+          <View style={styles.calendarHeader}>
+            <Pressable style={styles.calendarNav} onPress={() => setVisibleMonth((current) => addMonths(current, -1))}>
+              <Text style={styles.calendarNavText}>前月</Text>
+            </Pressable>
+            <Text style={styles.calendarTitle}>{monthLabel}</Text>
+            <Pressable style={styles.calendarNav} onPress={() => setVisibleMonth((current) => addMonths(current, 1))}>
+              <Text style={styles.calendarNavText}>翌月</Text>
+            </Pressable>
+          </View>
+          <View style={styles.weekRow}>
+            {["日", "月", "火", "水", "木", "金", "土"].map((day) => (
+              <Text key={day} style={styles.weekText}>{day}</Text>
+            ))}
+          </View>
+          <View style={styles.calendarGrid}>
+            {dates.map((date) => {
+              const formatted = formatDateValue(date);
+              const inMonth = date.getMonth() === visibleMonth.getMonth();
+              const active = selected ? formatted === formatDateValue(selected) : false;
+              return (
+                <Pressable
+                  key={formatted}
+                  onPress={() => {
+                    onSelect(formatted);
+                    setOpen(false);
+                  }}
+                  style={[styles.dayCell, active && styles.dayCellActive]}
+                >
+                  <Text style={[styles.dayText, !inMonth && styles.dayTextMuted, active && styles.dayTextActive]}>{date.getDate()}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function TimeSelectField({ label, value, onSelect }: { label: string; value: string; onSelect: (value: string) => void }) {
+  const [hour = "09", minute = "00"] = value.split(":");
+  const hours = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
+
+  return (
+    <View style={styles.inputWrap}>
+      <Text style={styles.label}>{label}</Text>
+      <View style={styles.twoColumn}>
+        <SelectField label="時" value={hour.padStart(2, "0")} options={hours} onSelect={(nextHour) => onSelect(`${nextHour}:${minute.padStart(2, "0")}`)} />
+        <SelectField label="分" value={minute.padStart(2, "0")} options={MINUTE_OPTIONS} onSelect={(nextMinute) => onSelect(`${hour.padStart(2, "0")}:${nextMinute}`)} />
+      </View>
+    </View>
+  );
+}
+
+function DurationSelectField({ label, value, onSelect }: { label: string; value: string; onSelect: (value: string) => void }) {
+  const [hour = "07", minute = "00"] = value.split(":");
+  const hours = Array.from({ length: 15 }, (_, index) => String(index).padStart(2, "0"));
+
+  return (
+    <View style={styles.inputWrap}>
+      <Text style={styles.label}>{label}</Text>
+      <View style={styles.twoColumn}>
+        <SelectField label="時間" value={hour.padStart(2, "0")} options={hours} onSelect={(nextHour) => onSelect(`${nextHour}:${minute.padStart(2, "0")}`)} />
+        <SelectField label="分" value={minute.padStart(2, "0")} options={MINUTE_OPTIONS} onSelect={(nextMinute) => onSelect(`${hour.padStart(2, "0")}:${nextMinute}`)} />
+      </View>
+    </View>
+  );
+}
+
 function PrimaryButton({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <Pressable style={styles.primaryButton} onPress={onPress}>
@@ -863,6 +1121,30 @@ const styles = StyleSheet.create({
   label: { fontSize: 12, color: "#526158", fontWeight: "700", marginBottom: 5 },
   input: { minHeight: 44, backgroundColor: "#ffffff", borderColor: "#d8d7cd", borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, color: "#263238", fontSize: 15 },
   textarea: { minHeight: 76, paddingTop: 10, textAlignVertical: "top" },
+  selectButton: { minHeight: 44, backgroundColor: "#ffffff", borderColor: "#d8d7cd", borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  selectButtonDisabled: { backgroundColor: "#f1f0eb" },
+  selectText: { color: "#263238", fontSize: 15, fontWeight: "700", flex: 1 },
+  selectPlaceholder: { color: "#8d948e", fontWeight: "600" },
+  selectArrow: { color: "#64736a", fontSize: 12, fontWeight: "800" },
+  selectMenu: { backgroundColor: "#ffffff", borderColor: "#d8d7cd", borderWidth: 1, borderRadius: 8, marginTop: 6, maxHeight: 220, overflow: "hidden" },
+  selectOption: { minHeight: 40, justifyContent: "center", paddingHorizontal: 12, borderBottomColor: "#ece9df", borderBottomWidth: 1 },
+  selectOptionActive: { backgroundColor: "#e4eee7" },
+  selectOptionText: { color: "#33423b", fontSize: 14, fontWeight: "700" },
+  selectOptionTextActive: { color: "#176b51" },
+  twoColumn: { flexDirection: "row", gap: 10 },
+  calendarBox: { backgroundColor: "#ffffff", borderColor: "#d8d7cd", borderWidth: 1, borderRadius: 8, marginTop: 6, padding: 10 },
+  calendarHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
+  calendarNav: { minHeight: 34, minWidth: 58, borderRadius: 8, backgroundColor: "#e6eee8", alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  calendarNavText: { color: "#176b51", fontSize: 12, fontWeight: "800" },
+  calendarTitle: { color: "#263238", fontSize: 15, fontWeight: "900" },
+  weekRow: { flexDirection: "row", marginBottom: 4 },
+  weekText: { flex: 1, textAlign: "center", color: "#6b746e", fontSize: 12, fontWeight: "800" },
+  calendarGrid: { flexDirection: "row", flexWrap: "wrap" },
+  dayCell: { width: `${100 / 7}%`, aspectRatio: 1.25, alignItems: "center", justifyContent: "center", borderRadius: 8 },
+  dayCellActive: { backgroundColor: "#176b51" },
+  dayText: { color: "#263238", fontSize: 13, fontWeight: "800" },
+  dayTextMuted: { color: "#b0b5af" },
+  dayTextActive: { color: "#ffffff" },
   primaryButton: { minHeight: 46, borderRadius: 8, backgroundColor: "#176b51", alignItems: "center", justifyContent: "center", paddingHorizontal: 14, marginTop: 4 },
   primaryButtonText: { color: "#ffffff", fontWeight: "800", fontSize: 15 },
   secondaryButton: { minHeight: 38, borderRadius: 8, backgroundColor: "#e6eee8", alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
