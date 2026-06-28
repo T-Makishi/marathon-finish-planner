@@ -53,7 +53,9 @@ type ElevationSegment = {
 type Plan = {
   id: string;
   raceId: string;
+  inputMode?: "目標タイム" | "申告ペース";
   targetTime: string;
+  declaredPace?: string;
   paceType: "イーブンペース" | "前半抑えめ" | "後半型" | "関門安全重視";
   gateBufferMin: string;
 };
@@ -126,7 +128,7 @@ const emptyRace: Race = {
 };
 const emptyGate: Gate = { id: "", raceId: "", name: "", distanceKm: "", gateTime: "", memo: "" };
 const emptySegment: ElevationSegment = { id: "", raceId: "", startKm: "", endKm: "", terrain: "上り", adjustSecPerKm: "10" };
-const emptyPlan: Plan = { id: "", raceId: "", targetTime: "05:30:00", paceType: "イーブンペース", gateBufferMin: "10" };
+const emptyPlan: Plan = { id: "", raceId: "", inputMode: "目標タイム", targetTime: "05:30:00", declaredPace: "07:00", paceType: "イーブンペース", gateBufferMin: "10" };
 const emptyPb: PBRecord = { id: "", event: "フル", raceName: "", date: "", time: "", memo: "" };
 const emptyPast: PastRace = { id: "", raceName: "", year: "", category: "フル", finishTime: "", weather: "", temperature: "", humidity: "" };
 
@@ -154,6 +156,24 @@ function parseDuration(value: string): number | null {
   if (parts.length === 2) return parts[0] * 3600 + parts[1] * 60;
   if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
   return null;
+}
+
+function parsePace(value: string): number | null {
+  const parts = value.trim().split(":").map(Number);
+  if (parts.some((part) => !Number.isFinite(part))) return null;
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  return null;
+}
+
+function getPlanTargetSeconds(race?: Race, plan?: Plan): number | null {
+  if (!race || !plan) return null;
+  if (plan.inputMode === "申告ペース") {
+    const paceSec = parsePace(plan.declaredPace ?? "");
+    const distance = n(race.distanceKm);
+    return paceSec && distance ? paceSec * distance : null;
+  }
+  return parseDuration(plan.targetTime);
 }
 
 function parseClock(value: string): number | null {
@@ -263,7 +283,7 @@ function paceFactor(type: Plan["paceType"], km: number, distance: number) {
 function buildPaceRows(race?: Race, plan?: Plan, gates: Gate[] = [], segments: ElevationSegment[] = []): PaceRow[] {
   if (!race || !plan) return [];
   const distance = n(race.distanceKm);
-  const targetSec = parseDuration(plan.targetTime);
+  const targetSec = getPlanTargetSeconds(race, plan);
   if (!distance || !targetSec) return [];
   const rows: PaceRow[] = [];
   const wholeKms = Math.floor(distance);
@@ -356,8 +376,12 @@ export default function App() {
     [selectedRace, selectedPlan, raceGates, raceSegments]
   );
   const minMargin = paceRows.map((row) => row.gateMarginSec).filter((value): value is number => value != null).sort((a, b) => a - b)[0];
-  const basePace = selectedRace && selectedPlan ? (parseDuration(selectedPlan.targetTime) ?? 0) / Math.max(n(selectedRace.distanceKm), 1) : null;
+  const selectedTargetSec = getPlanTargetSeconds(selectedRace, selectedPlan);
+  const basePace = selectedRace && selectedTargetSec ? selectedTargetSec / Math.max(n(selectedRace.distanceKm), 1) : null;
   const homeStatus = statusFromMargin(minMargin);
+  const homeJudgement = !raceGates.length ? "関門未登録" : minMargin == null ? "判定待ち" : minMargin < 0 ? "関門アウト" : "完走可能";
+  const goalTimeLabel = formatDuration(selectedTargetSec);
+  const gateRows = paceRows.filter((row) => row.gate);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
@@ -426,6 +450,8 @@ export default function App() {
 
   function savePlan() {
     if (!selectedRaceId) return Alert.alert("大会未選択", "先に大会を登録してください。");
+    if (planForm.inputMode === "申告ペース" && !parsePace(planForm.declaredPace ?? "")) return Alert.alert("入力不足", "申告ペースを 07:00 の形式で入力してください。");
+    if ((planForm.inputMode ?? "目標タイム") === "目標タイム" && !parseDuration(planForm.targetTime)) return Alert.alert("入力不足", "目標ゴールタイムを 05:30:00 の形式で入力してください。");
     const nextPlan = { ...planForm, id: planForm.id || selectedPlan?.id || uid(), raceId: selectedRaceId };
     const exists = store.plans.some((plan) => plan.id === nextPlan.id);
     updateStore({ ...store, plans: exists ? store.plans.map((plan) => (plan.id === nextPlan.id ? nextPlan : plan)) : [...store.plans, nextPlan] });
@@ -486,7 +512,7 @@ export default function App() {
           `<tr><td>${row.km}</td><td>${formatDuration(row.adjustedLapSec)}</td><td>${formatDuration(row.cumulativeSec)}</td><td>${selectedRace ? formatClockFromStart(selectedRace.startTime, row.cumulativeSec) : "-"}</td><td>${row.gate?.name ?? ""}</td><td>${formatDuration(row.gateMarginSec)}</td><td>${row.status}</td></tr>`
       )
       .join("");
-    const html = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 portrait;margin:22mm}body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#263238}h1{font-size:22px}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #ccd6d0;padding:5px;text-align:left}th{background:#e9f1eb}.summary{margin:12px 0 18px;padding:10px;background:#f6f3ee}</style></head><body><h1>マラソン完走プランナー</h1><div class="summary"><b>${selectedRace?.name ?? ""}</b><br>目標 ${selectedPlan?.targetTime ?? "-"} / 平均 ${formatPace(basePace)} / 最小関門余裕 ${formatDuration(minMargin)} / ${homeStatus}</div><table><thead><tr><th>km</th><th>補正後ラップ</th><th>累計</th><th>到達予定</th><th>関門</th><th>余裕</th><th>判定</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 portrait;margin:22mm}body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#263238}h1{font-size:22px}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #ccd6d0;padding:5px;text-align:left}th{background:#e9f1eb}.summary{margin:12px 0 18px;padding:10px;background:#f6f3ee}</style></head><body><h1>関門・ゴール逆算プランナー</h1><div class="summary"><b>${selectedRace?.name ?? ""}</b><br>目標 ${goalTimeLabel} / 推奨 ${formatPace(basePace)} / 最小関門余裕 ${formatDuration(minMargin)} / ${homeJudgement}</div><table><thead><tr><th>km</th><th>補正後ラップ</th><th>累計</th><th>到達予定</th><th>関門</th><th>余裕</th><th>判定</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
     const result = await Print.printToFileAsync({ html, width: 595, height: 842 });
     await shareFile(result.uri);
   }
@@ -524,18 +550,18 @@ export default function App() {
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
       <View style={styles.header}>
-        <Text style={styles.appName}>マラソン完走プランナー</Text>
-        <Text style={styles.appSub}>GPSなしで大会前の完走計画を作成</Text>
+        <Text style={styles.appName}>関門・ゴール逆算プランナー</Text>
+        <Text style={styles.appSub}>関門アウトを避ける完走ペースを逆算</Text>
       </View>
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
         {tab === "ホーム" && renderHome()}
         {tab === "大会登録" && renderRaceTab()}
-        {tab === "レースプラン" && renderPlanTab()}
+        {tab === "プラン" && renderPlanTab()}
         {tab === "ペース表" && renderPaceTable()}
-        {tab === "PB管理" && renderPbTab()}
+        {tab === "PB" && renderPbTab()}
       </ScrollView>
       <View style={styles.tabbar}>
-        {["ホーム", "大会登録", "レースプラン", "ペース表", "PB管理"].map((item) => (
+        {["ホーム", "大会登録", "プラン", "ペース表", "PB"].map((item) => (
           <Pressable key={item} onPress={() => setTab(item)} style={[styles.tabButton, tab === item && styles.tabButtonActive]}>
             <Text style={[styles.tabText, tab === item && styles.tabTextActive]}>{item}</Text>
           </Pressable>
@@ -548,14 +574,18 @@ export default function App() {
     return (
       <>
         <Card>
-          <Text style={styles.sectionTitle}>次回大会</Text>
+          <Text style={styles.sectionTitle}>完走判定</Text>
           <Text style={styles.heroTitle}>{selectedRace?.name || "大会未登録"}</Text>
           <Text style={styles.muted}>{selectedRace ? `${selectedRace.date} / ${selectedRace.location} / ${selectedRace.category}` : "大会登録タブから追加してください"}</Text>
+          <View style={styles.judgementBox}>
+            <Text style={[styles.judgementText, homeStatus !== "-" && statusStyle(homeStatus)]}>{homeJudgement}</Text>
+            <Text style={styles.body}>スタートから関門、ゴールまでの到達予定を逆算しています。</Text>
+          </View>
           <View style={styles.grid2}>
-            <Metric label="目標タイム" value={selectedPlan?.targetTime ?? "-"} />
-            <Metric label="平均ペース" value={formatPace(basePace)} />
+            <Metric label="推奨ペース" value={formatPace(basePace)} />
+            <Metric label="目標ゴール" value={goalTimeLabel} />
             <Metric label="最小関門余裕" value={formatDuration(minMargin)} />
-            <Metric label="安全判定" value={homeStatus} tone={homeStatus} />
+            <Metric label="判定" value={homeStatus} tone={homeStatus} />
           </View>
         </Card>
         <Card>
@@ -563,8 +593,27 @@ export default function App() {
           <RacePicker races={raceOptions} selectedId={selectedRaceId} onSelect={selectRace} />
         </Card>
         <Card>
-          <Text style={styles.sectionTitle}>設計方針</Text>
-          <Text style={styles.body}>大会情報は手入力で保存します。Garmin、Strava、GPS計測、公式サイト自動取得は実装していません。公式サイトURLは参照用に保存のみ行います。</Text>
+          <Text style={styles.sectionTitle}>関門チェック</Text>
+          {gateRows.length ? (
+            gateRows.map((row) => (
+              <View key={row.gate?.id} style={styles.gateSummary}>
+                <View style={styles.gateSummaryText}>
+                  <Text style={styles.listTitle}>{row.gate?.name} / {row.km.toFixed(row.km % 1 ? 3 : 0)}km</Text>
+                  <Text style={styles.muted}>到達予定 {selectedRace ? formatClockFromStart(selectedRace.startTime, row.cumulativeSec) : "-"} / 関門 {row.gate?.gateTime}</Text>
+                </View>
+                <View style={styles.gateSummaryBadge}>
+                  <Text style={[styles.metricValue, statusStyle(row.status)]}>{formatDuration(row.gateMarginSec)}</Text>
+                  <Badge label={row.status} />
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.body}>大会登録タブで関門を追加すると、ここに到達予定時刻と余裕時間が表示されます。</Text>
+          )}
+        </Card>
+        <Card>
+          <Text style={styles.sectionTitle}>方針</Text>
+          <Text style={styles.body}>GPS計測や外部アプリ連携ではなく、大会前に関門アウトを避けるペース配分を作るためのアプリです。大会情報と関門は手入力で保存します。</Text>
         </Card>
       </>
     );
@@ -666,17 +715,27 @@ export default function App() {
         <Segment value={planSection} values={["作成", "出力", "過去比較"]} onChange={setPlanSection} />
         {planSection === "作成" && (
           <Card>
-            <Text style={styles.sectionTitle}>レースプラン作成</Text>
+            <Text style={styles.sectionTitle}>関門・ゴール逆算プラン</Text>
             <RacePicker races={raceOptions} selectedId={selectedRaceId} onSelect={(id) => {
               selectRace(id);
               const existing = store.plans.find((plan) => plan.raceId === id);
               setPlanForm(existing ?? { ...emptyPlan, raceId: id });
             }} />
-            <Input label="目標ゴールタイム" value={planForm.id ? planForm.targetTime : selectedPlan?.targetTime ?? planForm.targetTime} onChangeText={(v) => setField(setPlanForm, "targetTime", v)} placeholder="05:30:00" />
+            <Text style={styles.label}>入力方法</Text>
+            <Segment value={planForm.inputMode ?? "目標タイム"} values={["目標タイム", "申告ペース"]} onChange={(v) => setPlanForm((prev) => ({ ...prev, inputMode: v as Plan["inputMode"] }))} />
+            {(planForm.inputMode ?? "目標タイム") === "目標タイム" ? (
+              <Input label="目標ゴールタイム" value={planForm.targetTime} onChangeText={(v) => setField(setPlanForm, "targetTime", v)} placeholder="05:30:00" />
+            ) : (
+              <Input label="申告ペース / km" value={planForm.declaredPace ?? ""} onChangeText={(v) => setField(setPlanForm, "declaredPace", v)} placeholder="07:00" />
+            )}
             <Text style={styles.label}>ペースタイプ</Text>
-            <Segment value={planForm.id ? planForm.paceType : selectedPlan?.paceType ?? planForm.paceType} values={["イーブンペース", "前半抑えめ", "後半型", "関門安全重視"]} onChange={(v) => setPlanForm((prev) => ({ ...prev, paceType: v as Plan["paceType"] }))} />
-            <Input label="関門余裕時間 分" value={planForm.id ? planForm.gateBufferMin : selectedPlan?.gateBufferMin ?? planForm.gateBufferMin} onChangeText={(v) => setField(setPlanForm, "gateBufferMin", v)} keyboardType="number-pad" />
-            <PrimaryButton label="プランを保存・再計算" onPress={savePlan} />
+            <Segment value={planForm.paceType} values={["イーブンペース", "前半抑えめ", "後半型", "関門安全重視"]} onChange={(v) => setPlanForm((prev) => ({ ...prev, paceType: v as Plan["paceType"] }))} />
+            <Input label="関門余裕時間 分" value={planForm.gateBufferMin} onChangeText={(v) => setField(setPlanForm, "gateBufferMin", v)} keyboardType="number-pad" />
+            <View style={styles.planPreview}>
+              <Metric label="逆算ゴール" value={formatDuration(getPlanTargetSeconds(selectedRace, planForm))} />
+              <Metric label="基準ペース" value={selectedRace && getPlanTargetSeconds(selectedRace, planForm) ? formatPace((getPlanTargetSeconds(selectedRace, planForm) ?? 0) / Math.max(n(selectedRace.distanceKm), 1)) : "-"} />
+            </View>
+            <PrimaryButton label="保存・再計算" onPress={savePlan} />
           </Card>
         )}
         {planSection === "出力" && (
@@ -699,21 +758,24 @@ export default function App() {
       <>
         <Card>
           <Text style={styles.sectionTitle}>ペース表</Text>
-          <Text style={styles.body}>{selectedRace?.name ?? "大会未選択"} / 目標 {selectedPlan?.targetTime ?? "-"} / 最小関門余裕 {formatDuration(minMargin)}</Text>
+          <Text style={styles.body}>{selectedRace?.name ?? "大会未選択"} / ゴール目安 {goalTimeLabel} / 推奨 {formatPace(basePace)} / 最小関門余裕 {formatDuration(minMargin)}</Text>
         </Card>
         {paceRows.map((row) => (
           <View key={`${row.km}`} style={styles.paceCard}>
             <View style={styles.paceHead}>
               <Text style={styles.kmText}>{row.km.toFixed(row.km % 1 ? 3 : 0)} km</Text>
-              <Badge label={row.status} />
+              {row.gate ? <Badge label={row.status} /> : <Text style={styles.muted}>通過</Text>}
             </View>
             <View style={styles.grid2}>
-              <Metric label="予定ラップ" value={formatDuration(row.baseLapSec)} />
-              <Metric label="補正後" value={formatDuration(row.adjustedLapSec)} />
-              <Metric label="累計" value={formatDuration(row.cumulativeSec)} />
+              <Metric label="予定ラップ" value={formatDuration(row.adjustedLapSec)} />
               <Metric label="到達予定" value={selectedRace ? formatClockFromStart(selectedRace.startTime, row.cumulativeSec) : "-"} />
             </View>
-            {row.gate && <Text style={styles.gateLine}>{row.gate.name} / 余裕 {formatDuration(row.gateMarginSec)}</Text>}
+            {row.gate && (
+              <View style={styles.gateDetail}>
+                <Text style={styles.gateLine}>{row.gate.name} / 関門 {row.gate.gateTime}</Text>
+                <Text style={[styles.gateMargin, statusStyle(row.status)]}>余裕 {formatDuration(row.gateMarginSec)}</Text>
+              </View>
+            )}
           </View>
         ))}
       </>
@@ -728,6 +790,7 @@ export default function App() {
           <>
             <Card>
               <Text style={styles.sectionTitle}>PB管理</Text>
+              <Text style={styles.body}>PBは完走判定の主役ではなく、目標タイムや申告ペースを決めるための参考記録です。</Text>
               <Segment value={pbForm.event} values={["5km", "10km", "ハーフ", "フル"]} onChange={(v) => setPbForm((prev) => ({ ...prev, event: v as PBRecord["event"] }))} />
               <Input label="大会名" value={pbForm.raceName} onChangeText={(v) => setField(setPbForm, "raceName", v)} />
               <Input label="日付" value={pbForm.date} onChangeText={(v) => setField(setPbForm, "date", v)} />
@@ -1066,6 +1129,8 @@ const styles = StyleSheet.create({
   heroTitle: { fontSize: 24, fontWeight: "900", color: "#263238", marginBottom: 5 },
   muted: { color: "#6d766f", fontSize: 13, lineHeight: 19 },
   body: { color: "#42514a", fontSize: 14, lineHeight: 21 },
+  judgementBox: { backgroundColor: "#f0f5ef", borderRadius: 8, padding: 12, marginTop: 12 },
+  judgementText: { color: "#263238", fontSize: 24, fontWeight: "900", marginBottom: 4 },
   grid2: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 12 },
   metric: { width: "48%", minHeight: 68, backgroundColor: "#f0f5ef", borderRadius: 8, padding: 10, justifyContent: "center" },
   metricLabel: { color: "#68766e", fontSize: 12, marginBottom: 5 },
@@ -1107,6 +1172,7 @@ const styles = StyleSheet.create({
   dangerButton: { minHeight: 38, borderRadius: 8, backgroundColor: "#fde3df", alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
   dangerButtonText: { color: "#a83429", fontWeight: "800", fontSize: 13 },
   rowGap: { gap: 9 },
+  planPreview: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 10 },
   segment: { flexDirection: "row", backgroundColor: "#e8e3d8", borderRadius: 8, padding: 4, marginBottom: 12 },
   segmentItem: { flex: 1, minHeight: 36, alignItems: "center", justifyContent: "center", borderRadius: 6, paddingHorizontal: 4 },
   segmentItemActive: { backgroundColor: "#fffdf8" },
@@ -1121,10 +1187,15 @@ const styles = StyleSheet.create({
   listText: { flex: 1 },
   listTitle: { color: "#263238", fontSize: 15, fontWeight: "800", marginBottom: 3 },
   listActions: { gap: 6 },
+  gateSummary: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: "#ebe7dc", paddingTop: 10, marginTop: 10 },
+  gateSummaryText: { flex: 1 },
+  gateSummaryBadge: { alignItems: "flex-end", gap: 5 },
   paceCard: { backgroundColor: "#fffdf8", borderColor: "#e2ded2", borderWidth: 1, borderRadius: 8, padding: 13, marginBottom: 10 },
   paceHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   kmText: { fontSize: 18, fontWeight: "900", color: "#263238" },
   gateLine: { marginTop: 10, fontSize: 13, color: "#42514a", fontWeight: "700" },
+  gateDetail: { borderTopWidth: 1, borderTopColor: "#ebe7dc", marginTop: 10, paddingTop: 2 },
+  gateMargin: { marginTop: 4, fontSize: 16, fontWeight: "900" },
   badge: { minWidth: 72, minHeight: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
   badgeText: { color: "#263238", fontSize: 12, fontWeight: "800" },
   tabbar: { flexDirection: "row", borderTopWidth: 1, borderTopColor: "#ddd8ca", backgroundColor: "#fffdf8", paddingHorizontal: 6, paddingTop: 6, paddingBottom: Platform.OS === "ios" ? 18 : 8 },
