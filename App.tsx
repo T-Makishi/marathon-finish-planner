@@ -887,18 +887,20 @@ function SelectField({
       </Pressable>
       {open && !disabled && (
         <View style={styles.selectMenu}>
-          {options.map((option) => (
-            <Pressable
-              key={option}
-              onPress={() => {
-                onSelect(option);
-                setOpen(false);
-              }}
-              style={[styles.selectOption, value === option && styles.selectOptionActive]}
-            >
-              <Text style={[styles.selectOptionText, value === option && styles.selectOptionTextActive]}>{option}</Text>
-            </Pressable>
-          ))}
+          <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={styles.selectScroll}>
+            {options.map((option) => (
+              <Pressable
+                key={option}
+                onPress={() => {
+                  onSelect(option);
+                  setOpen(false);
+                }}
+                style={[styles.selectOption, value === option && styles.selectOptionActive]}
+              >
+                <Text style={[styles.selectOptionText, value === option && styles.selectOptionTextActive]}>{option}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
         </View>
       )}
     </View>
@@ -1127,6 +1129,7 @@ const styles = StyleSheet.create({
   selectPlaceholder: { color: "#8d948e", fontWeight: "600" },
   selectArrow: { color: "#64736a", fontSize: 12, fontWeight: "800" },
   selectMenu: { backgroundColor: "#ffffff", borderColor: "#d8d7cd", borderWidth: 1, borderRadius: 8, marginTop: 6, maxHeight: 220, overflow: "hidden" },
+  selectScroll: { maxHeight: 220 },
   selectOption: { minHeight: 40, justifyContent: "center", paddingHorizontal: 12, borderBottomColor: "#ece9df", borderBottomWidth: 1 },
   selectOptionActive: { backgroundColor: "#e4eee7" },
   selectOptionText: { color: "#33423b", fontSize: 14, fontWeight: "700" },
