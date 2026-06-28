@@ -1,0 +1,10 @@
+node_modules/
+.expo/
+dist/
+web-build/
+.pnpm-store/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.DS_Store

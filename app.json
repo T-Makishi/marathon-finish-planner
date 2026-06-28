@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "マラソン完走プランナー",
+    "slug": "marathon-finish-planner",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#f6f3ee"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.local.marathonfinishplanner"
+    },
+    "android": {
+      "package": "com.local.marathonfinishplanner"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
