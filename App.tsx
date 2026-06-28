@@ -532,6 +532,7 @@ export default function App() {
   const [pbForm, setPbForm] = useState<PBRecord>(emptyPb);
   const [pastForm, setPastForm] = useState<PastRace>(emptyPast);
   const [raceSearch, setRaceSearch] = useState("");
+  const [activePicker, setActivePicker] = useState<string | null>(null);
 
   const selectedRace = store.races.find((race) => race.id === store.selectedRaceId) ?? store.races[0];
   const selectedRaceId = selectedRace?.id ?? "";
@@ -857,7 +858,10 @@ export default function App() {
   function renderRaceTab() {
     return (
       <>
-        <Segment value={raceSection} values={["大会", "関門", "給水", "高低差", "設定"]} onChange={setRaceSection} />
+        <Segment value={raceSection} values={["大会", "関門", "給水P", "高低差", "設定"]} onChange={(value) => {
+          setActivePicker(null);
+          setRaceSection(value);
+        }} />
         <Card>
           <Text style={styles.sectionTitle}>対象大会</Text>
           <RacePicker races={raceOptions} selectedId={selectedRaceId} onSelect={selectRace} />
@@ -872,6 +876,9 @@ export default function App() {
                 value={raceForm.prefecture ?? ""}
                 placeholder="都道府県を選択"
                 options={PREFECTURES}
+                pickerId="race-prefecture"
+                activePicker={activePicker}
+                setActivePicker={setActivePicker}
                 onSelect={(value) => setRaceForm((prev) => ({ ...prev, prefecture: value, municipality: "", location: combineLocation(value, "", prev.location) }))}
               />
               <SelectField
@@ -879,18 +886,24 @@ export default function App() {
                 value={raceForm.municipality ?? ""}
                 placeholder={raceForm.prefecture ? "市町村を選択" : "先に都道府県を選択"}
                 options={raceForm.prefecture ? PREFECTURE_MUNICIPALITIES[raceForm.prefecture] ?? [] : []}
+                pickerId="race-municipality"
+                activePicker={activePicker}
+                setActivePicker={setActivePicker}
                 onSelect={(value) => setRaceForm((prev) => ({ ...prev, municipality: value, location: combineLocation(prev.prefecture, value, prev.location) }))}
               />
-              <CalendarField label="大会日" value={raceForm.date} onSelect={(value) => setField(setRaceForm, "date", value)} />
+              <CalendarField label="大会日" value={raceForm.date} pickerId="race-date" activePicker={activePicker} setActivePicker={setActivePicker} onSelect={(value) => setField(setRaceForm, "date", value)} />
               <SelectField
                 label="種目"
                 value={raceForm.category}
                 options={RACE_CATEGORIES}
+                pickerId="race-category"
+                activePicker={activePicker}
+                setActivePicker={setActivePicker}
                 onSelect={(value) => setRaceForm((prev) => ({ ...prev, category: value, distanceKm: CATEGORY_DISTANCE[value] ?? prev.distanceKm }))}
               />
               <Input label="距離 km" value={raceForm.distanceKm} onChangeText={(v) => setField(setRaceForm, "distanceKm", v)} keyboardType="decimal-pad" />
-              <TimeSelectField label="スタート時刻" value={raceForm.startTime} onSelect={(value) => setField(setRaceForm, "startTime", value)} />
-              <DurationSelectField label="制限時間（制限ゴール時刻も計算）" value={raceForm.limitTime} onSelect={(value) => setField(setRaceForm, "limitTime", value)} />
+              <TimeSelectField label="スタート時刻" value={raceForm.startTime} pickerId="race-start" activePicker={activePicker} setActivePicker={setActivePicker} onSelect={(value) => setField(setRaceForm, "startTime", value)} />
+              <DurationSelectField label="制限時間（制限ゴール時刻も計算）" value={raceForm.limitTime} pickerId="race-limit" activePicker={activePicker} setActivePicker={setActivePicker} onSelect={(value) => setField(setRaceForm, "limitTime", value)} />
               <Input label="ロスタイム 分（号砲からスタートラインまで）" value={raceForm.lostTimeMin ?? ""} onChangeText={(v) => setField(setRaceForm, "lostTimeMin", v)} keyboardType="number-pad" />
               <View style={styles.limitSummary}>
                 <Text style={styles.limitText}>制限ゴール時刻: {getLimitGoalTime(raceForm)}</Text>
@@ -962,7 +975,7 @@ export default function App() {
             ))}
           </>
         )}
-        {raceSection === "給水" && (
+        {(raceSection === "給水P" || raceSection === "給水") && (
           <>
             <Card>
               <Text style={styles.sectionTitle}>{stopForm.id ? "給水/停止を編集" : "給水/停止ポイント"}</Text>
@@ -1194,21 +1207,36 @@ function SelectField({
   value,
   options,
   onSelect,
-  placeholder = "選択してください"
+  placeholder = "選択してください",
+  pickerId,
+  activePicker,
+  setActivePicker
 }: {
   label: string;
   value: string;
   options: string[];
   onSelect: (value: string) => void;
   placeholder?: string;
+  pickerId?: string;
+  activePicker?: string | null;
+  setActivePicker?: (value: string | null) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
   const disabled = options.length === 0;
+  const open = pickerId && activePicker !== undefined ? activePicker === pickerId : localOpen;
+  const toggleOpen = () => {
+    if (pickerId && setActivePicker) setActivePicker(open ? null : pickerId);
+    else setLocalOpen((current) => !current);
+  };
+  const closePicker = () => {
+    if (pickerId && setActivePicker) setActivePicker(null);
+    else setLocalOpen(false);
+  };
 
   return (
     <View style={styles.inputWrap}>
       <Text style={styles.label}>{label}</Text>
-      <Pressable disabled={disabled} onPress={() => setOpen((current) => !current)} style={[styles.selectButton, disabled && styles.selectButtonDisabled]}>
+      <Pressable disabled={disabled} onPress={toggleOpen} style={[styles.selectButton, disabled && styles.selectButtonDisabled]}>
         <Text style={[styles.selectText, !value && styles.selectPlaceholder]}>{value || placeholder}</Text>
         <Text style={styles.selectArrow}>{open ? "▲" : "▼"}</Text>
       </Pressable>
@@ -1220,7 +1248,7 @@ function SelectField({
                 key={option}
                 onPress={() => {
                   onSelect(option);
-                  setOpen(false);
+                  closePicker();
                 }}
                 style={[styles.selectOption, value === option && styles.selectOptionActive]}
               >
@@ -1234,17 +1262,40 @@ function SelectField({
   );
 }
 
-function CalendarField({ label, value, onSelect }: { label: string; value: string; onSelect: (value: string) => void }) {
-  const [open, setOpen] = useState(false);
+function CalendarField({
+  label,
+  value,
+  onSelect,
+  pickerId,
+  activePicker,
+  setActivePicker
+}: {
+  label: string;
+  value: string;
+  onSelect: (value: string) => void;
+  pickerId?: string;
+  activePicker?: string | null;
+  setActivePicker?: (value: string | null) => void;
+}) {
+  const [localOpen, setLocalOpen] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(() => parseDateValue(value));
+  const open = pickerId && activePicker !== undefined ? activePicker === pickerId : localOpen;
   const dates = buildCalendarDates(visibleMonth);
   const selected = value ? parseDateValue(value) : null;
   const monthLabel = `${visibleMonth.getFullYear()}年 ${visibleMonth.getMonth() + 1}月`;
+  const toggleOpen = () => {
+    if (pickerId && setActivePicker) setActivePicker(open ? null : pickerId);
+    else setLocalOpen((current) => !current);
+  };
+  const closePicker = () => {
+    if (pickerId && setActivePicker) setActivePicker(null);
+    else setLocalOpen(false);
+  };
 
   return (
     <View style={styles.inputWrap}>
       <Text style={styles.label}>{label}</Text>
-      <Pressable onPress={() => setOpen((current) => !current)} style={styles.selectButton}>
+      <Pressable onPress={toggleOpen} style={styles.selectButton}>
         <Text style={[styles.selectText, !value && styles.selectPlaceholder]}>{value || "カレンダーから選択"}</Text>
         <Text style={styles.selectArrow}>{open ? "▲" : "▼"}</Text>
       </Pressable>
@@ -1274,7 +1325,7 @@ function CalendarField({ label, value, onSelect }: { label: string; value: strin
                   key={formatted}
                   onPress={() => {
                     onSelect(formatted);
-                    setOpen(false);
+                    closePicker();
                   }}
                   style={[styles.dayCell, active && styles.dayCellActive]}
                 >
@@ -1289,7 +1340,21 @@ function CalendarField({ label, value, onSelect }: { label: string; value: strin
   );
 }
 
-function TimeSelectField({ label, value, onSelect }: { label: string; value: string; onSelect: (value: string) => void }) {
+function TimeSelectField({
+  label,
+  value,
+  onSelect,
+  pickerId,
+  activePicker,
+  setActivePicker
+}: {
+  label: string;
+  value: string;
+  onSelect: (value: string) => void;
+  pickerId?: string;
+  activePicker?: string | null;
+  setActivePicker?: (value: string | null) => void;
+}) {
   const [hour = "09", minute = "00"] = value.split(":");
   const hours = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
 
@@ -1297,14 +1362,28 @@ function TimeSelectField({ label, value, onSelect }: { label: string; value: str
     <View style={styles.inputWrap}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.twoColumn}>
-        <SelectField label="時" value={hour.padStart(2, "0")} options={hours} onSelect={(nextHour) => onSelect(`${nextHour}:${minute.padStart(2, "0")}`)} />
-        <SelectField label="分" value={minute.padStart(2, "0")} options={MINUTE_OPTIONS} onSelect={(nextMinute) => onSelect(`${hour.padStart(2, "0")}:${nextMinute}`)} />
+        <SelectField label="時" value={hour.padStart(2, "0")} options={hours} pickerId={`${pickerId ?? label}-hour`} activePicker={activePicker} setActivePicker={setActivePicker} onSelect={(nextHour) => onSelect(`${nextHour}:${minute.padStart(2, "0")}`)} />
+        <SelectField label="分" value={minute.padStart(2, "0")} options={MINUTE_OPTIONS} pickerId={`${pickerId ?? label}-minute`} activePicker={activePicker} setActivePicker={setActivePicker} onSelect={(nextMinute) => onSelect(`${hour.padStart(2, "0")}:${nextMinute}`)} />
       </View>
     </View>
   );
 }
 
-function DurationSelectField({ label, value, onSelect }: { label: string; value: string; onSelect: (value: string) => void }) {
+function DurationSelectField({
+  label,
+  value,
+  onSelect,
+  pickerId,
+  activePicker,
+  setActivePicker
+}: {
+  label: string;
+  value: string;
+  onSelect: (value: string) => void;
+  pickerId?: string;
+  activePicker?: string | null;
+  setActivePicker?: (value: string | null) => void;
+}) {
   const [hour = "07", minute = "00"] = value.split(":");
   const hours = Array.from({ length: 15 }, (_, index) => String(index).padStart(2, "0"));
 
@@ -1312,8 +1391,8 @@ function DurationSelectField({ label, value, onSelect }: { label: string; value:
     <View style={styles.inputWrap}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.twoColumn}>
-        <SelectField label="時間" value={hour.padStart(2, "0")} options={hours} onSelect={(nextHour) => onSelect(`${nextHour}:${minute.padStart(2, "0")}`)} />
-        <SelectField label="分" value={minute.padStart(2, "0")} options={MINUTE_OPTIONS} onSelect={(nextMinute) => onSelect(`${hour.padStart(2, "0")}:${nextMinute}`)} />
+        <SelectField label="時間" value={hour.padStart(2, "0")} options={hours} pickerId={`${pickerId ?? label}-hour`} activePicker={activePicker} setActivePicker={setActivePicker} onSelect={(nextHour) => onSelect(`${nextHour}:${minute.padStart(2, "0")}`)} />
+        <SelectField label="分" value={minute.padStart(2, "0")} options={MINUTE_OPTIONS} pickerId={`${pickerId ?? label}-minute`} activePicker={activePicker} setActivePicker={setActivePicker} onSelect={(nextMinute) => onSelect(`${hour.padStart(2, "0")}:${nextMinute}`)} />
       </View>
     </View>
   );
@@ -1450,7 +1529,7 @@ const styles = StyleSheet.create({
   metricLabel: { color: "#68766e", fontSize: 12, marginBottom: 5 },
   metricValue: { color: "#263238", fontSize: 16, fontWeight: "800" },
   metricCard: { backgroundColor: "#fffdf8", borderWidth: 1, borderColor: "#e2ded2", borderRadius: 8, padding: 16, marginBottom: 10 },
-  inputWrap: { flex: 1, marginBottom: 10 },
+  inputWrap: { flex: 1, minWidth: 0, marginBottom: 10 },
   label: { fontSize: 12, color: "#526158", fontWeight: "700", marginBottom: 5 },
   input: { minHeight: 44, backgroundColor: "#ffffff", borderColor: "#d8d7cd", borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, color: "#263238", fontSize: 15 },
   textarea: { minHeight: 76, paddingTop: 10, textAlignVertical: "top" },
@@ -1459,8 +1538,8 @@ const styles = StyleSheet.create({
   selectText: { color: "#263238", fontSize: 15, fontWeight: "700", flex: 1 },
   selectPlaceholder: { color: "#8d948e", fontWeight: "600" },
   selectArrow: { color: "#64736a", fontSize: 12, fontWeight: "800" },
-  selectMenu: { backgroundColor: "#ffffff", borderColor: "#d8d7cd", borderWidth: 1, borderRadius: 8, marginTop: 6, maxHeight: 220, overflow: "hidden" },
-  selectScroll: { maxHeight: 220 },
+  selectMenu: { backgroundColor: "#ffffff", borderColor: "#d8d7cd", borderWidth: 1, borderRadius: 8, marginTop: 6, height: 220, overflow: "hidden" },
+  selectScroll: { height: 220 },
   selectOption: { minHeight: 40, justifyContent: "center", paddingHorizontal: 12, borderBottomColor: "#ece9df", borderBottomWidth: 1 },
   selectOptionActive: { backgroundColor: "#e4eee7" },
   selectOptionText: { color: "#33423b", fontSize: 14, fontWeight: "700" },
@@ -1476,7 +1555,7 @@ const styles = StyleSheet.create({
   weekRow: { flexDirection: "row", marginBottom: 4 },
   weekText: { flex: 1, textAlign: "center", color: "#6b746e", fontSize: 12, fontWeight: "800" },
   calendarGrid: { flexDirection: "row", flexWrap: "wrap" },
-  dayCell: { width: `${100 / 7}%`, aspectRatio: 1.25, alignItems: "center", justifyContent: "center", borderRadius: 8 },
+  dayCell: { width: `${100 / 7}%`, height: 40, alignItems: "center", justifyContent: "center", borderRadius: 8 },
   dayCellActive: { backgroundColor: "#176b51" },
   dayText: { color: "#263238", fontSize: 13, fontWeight: "800" },
   dayTextMuted: { color: "#b0b5af" },
