@@ -15,7 +15,7 @@ import {
   Text,
   TextInput,
   View,
-  ImageBackground
+  Image
 } from "react-native";
 import { JAPAN_MUNICIPALITIES } from "./data/japanMunicipalities";
 
@@ -824,7 +824,8 @@ export default function App() {
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
-      <ImageBackground source={RUNNER_BACKGROUND} style={styles.appBackground} imageStyle={styles.appBackgroundImage}>
+      <View style={styles.appBackground}>
+        <Image source={RUNNER_BACKGROUND} style={styles.appBackgroundImage} resizeMode="cover" />
         <View style={styles.appOverlay} />
         <View style={styles.header}>
           <Text style={styles.appName}>CHEBIS RUN</Text>
@@ -844,7 +845,7 @@ export default function App() {
             </Pressable>
           ))}
         </View>
-      </ImageBackground>
+      </View>
     </SafeAreaView>
   );
 
@@ -1681,7 +1682,7 @@ function badgeStyle(tone: StatusLabel) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#f3f1ec" },
   appBackground: { flex: 1 },
-  appBackgroundImage: { opacity: 0.68, resizeMode: "cover" },
+  appBackgroundImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%", opacity: 0.74 },
   appOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(247,245,240,0.62)" },
   loading: { margin: 24, color: "#263238" },
   header: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 8, backgroundColor: "transparent" },
