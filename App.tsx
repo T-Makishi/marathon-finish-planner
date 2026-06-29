@@ -14,7 +14,8 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
+  ImageBackground
 } from "react-native";
 import { JAPAN_MUNICIPALITIES } from "./data/japanMunicipalities";
 
@@ -134,6 +135,7 @@ type PaceRow = {
 type StatusLabel = "安全" | "注意" | "危険" | "関門アウト" | "-";
 
 const STORAGE_KEY = "marathon-finish-planner-v1";
+const RUNNER_BACKGROUND = require("./assets/runner-monochrome.jpg");
 const defaultSettings: Settings = { climbSec: "10", descentSec: "-5", flatSec: "0" };
 const emptyRace: Race = {
   id: "",
@@ -822,47 +824,95 @@ export default function App() {
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
-      <View style={styles.header}>
-        <Text style={styles.appName}>RUN Finish Planner</Text>
-        <Text style={styles.appSub}>関門時間から完走ペースを逆算</Text>
-      </View>
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
-        {tab === "ホーム" && renderHome()}
-        {tab === "大会登録" && renderRaceTab()}
-        {tab === "プラン" && renderPlanTab()}
-        {tab === "ペース表" && renderPaceTable()}
-        {tab === "PB" && renderPbTab()}
-      </ScrollView>
-      <View style={styles.tabbar}>
-        {["ホーム", "大会登録", "プラン", "ペース表", "PB"].map((item) => (
-          <Pressable key={item} onPress={() => setTab(item)} style={[styles.tabButton, tab === item && styles.tabButtonActive]}>
-            <Text style={[styles.tabText, tab === item && styles.tabTextActive]}>{item}</Text>
-          </Pressable>
-        ))}
-      </View>
+      <ImageBackground source={RUNNER_BACKGROUND} style={styles.appBackground} imageStyle={styles.appBackgroundImage}>
+        <View style={styles.appOverlay} />
+        <View style={styles.header}>
+          <Text style={styles.appName}>CHEBIS RUN</Text>
+          <Text style={styles.appSub}>関門時間から完走ペースを逆算</Text>
+        </View>
+        <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
+          {tab === "ホーム" && renderHome()}
+          {tab === "大会登録" && renderRaceTab()}
+          {tab === "プラン" && renderPlanTab()}
+          {tab === "ペース表" && renderPaceTable()}
+          {tab === "PB" && renderPbTab()}
+        </ScrollView>
+        <View style={styles.tabbar}>
+          {["ホーム", "大会登録", "プラン", "ペース表", "PB"].map((item) => (
+            <Pressable key={item} onPress={() => setTab(item)} style={[styles.tabButton, tab === item && styles.tabButtonActive]}>
+              <Text style={[styles.tabText, tab === item && styles.tabTextActive]}>{item}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </ImageBackground>
     </SafeAreaView>
   );
 
   function renderHome() {
+    const planType = normalizedPaceType(selectedPlan?.paceType ?? "安全完走型");
+    const pacePreview = [5, 10, 15, 20]
+      .map((km) => paceRows.find((row) => Math.abs(row.km - km) < 0.01))
+      .filter(Boolean) as PaceRow[];
+    const goalRow = paceRows[paceRows.length - 1];
+    const homePaceRows = [...pacePreview, ...(goalRow ? [goalRow] : [])].filter((row, index, rows) => rows.findIndex((item) => Math.abs(item.km - row.km) < 0.01) === index);
     return (
       <>
-        <Card>
-          <Text style={styles.sectionTitle}>完走可能評価</Text>
-          <Text style={styles.heroTitle}>{selectedRace?.name || "大会未登録"}</Text>
-          <Text style={styles.muted}>{selectedRace ? `${selectedRace.date} / ${selectedRace.location} / ${selectedRace.category}` : "大会登録タブから追加してください"}</Text>
-          <View style={styles.judgementBox}>
-            {showSubLabel && <Text style={styles.subJudgementText}>{finishZone}</Text>}
-            <Text style={styles.resultLine}>予測ゴール {formatDurationJa(predictedOfficialGoalSec)}</Text>
-            <Text style={styles.resultLine}>完走判定 <Text style={[homeJudgement === "完走可能" && styles.resultOk, homeJudgement === "関門アウト" && styles.resultDanger]}>{homeJudgement}</Text></Text>
+        <View style={styles.homeHero}>
+          <View style={styles.raceFocusCard}>
+            <Text style={styles.darkLabel}>対象大会</Text>
+            <Text style={styles.darkRaceTitle}>{selectedRace?.name || "大会未登録"}</Text>
+            <Text style={styles.darkRaceMeta}>{selectedRace ? `${selectedRace.date} / ${selectedRace.location} / ${selectedRace.category}` : "大会登録タブから追加してください"}</Text>
           </View>
-          <View style={styles.grid2}>
-            <Metric label="関門余裕" value={`最小${formatMinutesLabel(minMargin)} / 最大${formatMinutesLabel(maxMargin)}`} />
-            <Metric label="最も余裕が少ない関門" value={tightestGateRow?.gate?.name ?? "-"} />
-            <Metric label="目標ゴール" value={goalTimeLabel} />
-            <Metric label="平均ペース" value={formatPace(basePace)} />
+
+          <View style={styles.homeMetricGrid}>
+            <View style={styles.glassMetric}>
+              <Text style={styles.homeMetricLabel}>予測ゴール</Text>
+              <Text style={styles.homeMetricValue}>{formatDuration(predictedOfficialGoalSec)}</Text>
+            </View>
+            <View style={styles.glassMetric}>
+              <Text style={styles.homeMetricLabel}>平均ペース</Text>
+              <Text style={styles.homeMetricValue}>{formatPace(basePace)}</Text>
+            </View>
+            <View style={styles.glassMetric}>
+              <Text style={styles.homeMetricLabel}>関門余裕（最小/最大）</Text>
+              <Text style={styles.homeMetricValue}>{formatMinutesLabel(minMargin)} / {formatMinutesLabel(maxMargin)}</Text>
+            </View>
+            <View style={styles.glassMetric}>
+              <Text style={styles.homeMetricLabel}>最も余裕が少ない関門</Text>
+              <Text style={styles.homeMetricValue}>{tightestGateRow?.gate?.name ?? "-"}</Text>
+            </View>
           </View>
+
+          <View style={styles.glassWidePanel}>
+            <Text style={styles.homeMetricLabel}>完走判定</Text>
+            {showSubLabel && homeJudgement !== "関門アウト" && <Text style={styles.subJudgementText}>{finishZone}</Text>}
+            <Text style={[styles.homeJudgeText, homeJudgement === "完走可能" && styles.resultOk, homeJudgement === "関門アウト" && styles.resultDanger]}>{homeJudgement}</Text>
+          </View>
+
+          <View style={styles.glassWidePanel}>
+            <Text style={styles.homeMetricLabel}>プランタイプ</Text>
+            <Text style={styles.planTypeText}>{planType}</Text>
+            <Text style={styles.homePanelSub}>{paceTypeDescription(selectedPlan?.paceType ?? "安全完走型")}</Text>
+          </View>
+
+          <View style={styles.darkPacePanel}>
+            <Text style={styles.darkPanelTitle}>ペース表（目安）</Text>
+            <View style={styles.darkTableHeader}>
+              <Text style={styles.darkTableCell}>距離km</Text>
+              <Text style={styles.darkTableCell}>通過予定</Text>
+              <Text style={styles.darkTableCell}>ペース/km</Text>
+            </View>
+            {homePaceRows.map((row) => (
+              <View key={`home-${row.km}`} style={styles.darkTableRow}>
+                <Text style={styles.darkTableCell}>{row === goalRow ? "ゴール" : row.km.toFixed(0)}</Text>
+                <Text style={styles.darkTableCell}>{formatDuration(row.cumulativeSec)}</Text>
+                <Text style={styles.darkTableCell}>{formatPace(row.adjustedLapSec).replace("/km", "")}</Text>
+              </View>
+            ))}
+          </View>
+
           <Text style={styles.noticeText}>注意: {attentionComment}</Text>
-        </Card>
+        </View>
         <Card>
           <Text style={styles.sectionTitle}>対象大会</Text>
           <RacePicker races={raceOptions} selectedId={selectedRaceId} onSelect={selectRace} />
@@ -1629,20 +1679,41 @@ function badgeStyle(tone: StatusLabel) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#f6f3ee" },
+  safe: { flex: 1, backgroundColor: "#f3f1ec" },
+  appBackground: { flex: 1 },
+  appBackgroundImage: { opacity: 0.68, resizeMode: "cover" },
+  appOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(247,245,240,0.62)" },
   loading: { margin: 24, color: "#263238" },
-  header: { paddingHorizontal: 18, paddingTop: 12, paddingBottom: 10, backgroundColor: "#f6f3ee" },
-  appName: { fontSize: 22, fontWeight: "800", color: "#263238" },
-  appSub: { marginTop: 3, color: "#61716a", fontSize: 13 },
+  header: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 8, backgroundColor: "transparent" },
+  appName: { fontSize: 34, lineHeight: 38, fontWeight: "900", color: "#101514", letterSpacing: 0 },
+  appSub: { marginTop: 3, color: "#1f2926", fontSize: 13, fontWeight: "800" },
   content: { flex: 1 },
-  contentInner: { padding: 14, paddingBottom: 110 },
-  card: { backgroundColor: "#fffdf8", borderWidth: 1, borderColor: "#e2ded2", borderRadius: 8, padding: 16, marginBottom: 12, shadowColor: "#000", shadowOpacity: 0.05, shadowOffset: { width: 0, height: 2 }, shadowRadius: 8, elevation: 1 },
+  contentInner: { padding: 14, paddingBottom: 150 },
+  card: { backgroundColor: "rgba(255,255,255,0.88)", borderWidth: 1, borderColor: "rgba(30,34,32,0.12)", borderRadius: 8, padding: 16, marginBottom: 12, shadowColor: "#000", shadowOpacity: 0.08, shadowOffset: { width: 0, height: 2 }, shadowRadius: 8, elevation: 1 },
   sectionTitle: { fontSize: 15, fontWeight: "800", color: "#31423b", marginBottom: 8 },
   heroTitle: { fontSize: 24, fontWeight: "900", color: "#263238", marginBottom: 5 },
   muted: { color: "#6d766f", fontSize: 13, lineHeight: 19 },
   body: { color: "#42514a", fontSize: 14, lineHeight: 21 },
   helpText: { color: "#5d6d65", fontSize: 12, lineHeight: 18, marginTop: 2, marginBottom: 12 },
   noticeText: { marginTop: 12, color: "#6b4d10", backgroundColor: "#fff4d6", borderRadius: 8, padding: 10, fontSize: 13, lineHeight: 19, fontWeight: "700" },
+  homeHero: { gap: 10, marginBottom: 12 },
+  raceFocusCard: { backgroundColor: "rgba(15,17,16,0.82)", borderRadius: 8, padding: 16, minHeight: 110, justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.16)" },
+  darkLabel: { color: "#ffffff", fontSize: 13, fontWeight: "900", marginBottom: 8 },
+  darkRaceTitle: { color: "#ffffff", fontSize: 23, lineHeight: 29, fontWeight: "900" },
+  darkRaceMeta: { color: "rgba(255,255,255,0.88)", fontSize: 13, lineHeight: 19, marginTop: 6, fontWeight: "800" },
+  homeMetricGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  glassMetric: { width: "48%", minHeight: 86, backgroundColor: "rgba(255,255,255,0.78)", borderWidth: 1, borderColor: "rgba(255,255,255,0.78)", borderRadius: 8, padding: 12, justifyContent: "center" },
+  glassWidePanel: { backgroundColor: "rgba(255,255,255,0.78)", borderWidth: 1, borderColor: "rgba(255,255,255,0.78)", borderRadius: 8, padding: 14 },
+  homeMetricLabel: { color: "#26302c", fontSize: 12, lineHeight: 17, fontWeight: "800", marginBottom: 4 },
+  homeMetricValue: { color: "#111817", fontSize: 21, lineHeight: 27, fontWeight: "900" },
+  homeJudgeText: { fontSize: 24, lineHeight: 30, fontWeight: "900" },
+  planTypeText: { color: "#111817", fontSize: 22, lineHeight: 28, fontWeight: "900" },
+  homePanelSub: { color: "#28332f", fontSize: 13, lineHeight: 19, marginTop: 5, fontWeight: "700" },
+  darkPacePanel: { backgroundColor: "rgba(14,15,15,0.88)", borderRadius: 8, padding: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.14)" },
+  darkPanelTitle: { color: "#ffffff", fontSize: 16, lineHeight: 22, fontWeight: "900", marginBottom: 8 },
+  darkTableHeader: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.22)", paddingBottom: 6, marginBottom: 4 },
+  darkTableRow: { flexDirection: "row", paddingVertical: 4 },
+  darkTableCell: { flex: 1, color: "#ffffff", fontSize: 13, lineHeight: 19, fontWeight: "800" },
   judgementBox: { backgroundColor: "#f0f5ef", borderRadius: 8, padding: 12, marginTop: 12 },
   judgementText: { color: "#263238", fontSize: 24, fontWeight: "900", marginBottom: 4 },
   subJudgementText: { color: "#263238", fontSize: 23, fontWeight: "900", marginBottom: 6 },
@@ -1736,9 +1807,9 @@ const styles = StyleSheet.create({
   gateMargin: { marginTop: 4, fontSize: 16, fontWeight: "900" },
   badge: { minWidth: 72, minHeight: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
   badgeText: { color: "#263238", fontSize: 12, fontWeight: "800" },
-  tabbar: { flexDirection: "row", borderTopWidth: 1, borderTopColor: "#ddd8ca", backgroundColor: "#fffdf8", paddingHorizontal: 6, paddingTop: 6, paddingBottom: Platform.OS === "ios" ? 18 : 8 },
-  tabButton: { flex: 1, minHeight: 46, borderRadius: 8, alignItems: "center", justifyContent: "center", paddingHorizontal: 2 },
-  tabButtonActive: { backgroundColor: "#e4eee7" },
-  tabText: { color: "#6b746e", fontWeight: "800", fontSize: 11 },
+  tabbar: { flexDirection: "row", borderTopWidth: 1, borderTopColor: "rgba(30,34,32,0.14)", backgroundColor: "rgba(255,255,255,0.94)", paddingHorizontal: 6, paddingTop: 6, paddingBottom: Platform.OS === "ios" ? 18 : 8 },
+  tabButton: { flex: 1, minHeight: 48, borderRadius: 8, alignItems: "center", justifyContent: "center", paddingHorizontal: 2 },
+  tabButtonActive: { backgroundColor: "#dfeee7" },
+  tabText: { color: "#5e6763", fontWeight: "900", fontSize: 11 },
   tabTextActive: { color: "#176b51" }
 });
