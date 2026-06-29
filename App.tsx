@@ -169,6 +169,7 @@ const CATEGORY_DISTANCE: Record<string, string> = {
   ウルトラマラソン: "100"
 };
 const MINUTE_OPTIONS = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
+const ADJUST_OPTIONS = ["-30", "-20", "-15", "-10", "-5", "0", "5", "10", "15", "20", "30", "45", "60"];
 
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const n = (value: string, fallback = 0) => {
@@ -356,6 +357,11 @@ function subLabel(sec: number | null | undefined) {
   return "完走重視";
 }
 
+function isFullMarathon(race?: Race) {
+  if (!race) return false;
+  return race.category.includes("フル") || Math.abs(n(race.distanceKm) - 42.195) < 0.2;
+}
+
 function planModeDescription(mode?: Plan["inputMode"]) {
   if (mode === "目標ゴールタイムを狙う") return "入力したゴールタイムに合わせてペースを作成します。";
   if (mode === "自己ベスト更新を狙う") return "登録済みPBより少し速い目標で計画します。";
@@ -367,6 +373,19 @@ function paceTypeDescription(type?: Plan["paceType"]) {
   if (normalized === "一定ペース型") return "最初から最後までできるだけ同じペースで走ります。";
   if (normalized === "後半温存型") return "前半を少し抑えて、後半に余力を残します。";
   return "関門に余裕を持つことを最優先にします。";
+}
+
+function planTargetLabel(mode?: Plan["inputMode"]) {
+  if (mode === "目標ゴールタイムを狙う") return "入力した目標ゴールタイム";
+  if (mode === "自己ベスト更新を狙う") return "フルPBから短縮した目標タイム";
+  return "大会の制限時間";
+}
+
+function planModeShortLabel(mode: string) {
+  if (mode === "制限時間内で完走") return "制限完走";
+  if (mode === "目標ゴールタイムを狙う") return "目標タイム";
+  if (mode === "自己ベスト更新を狙う") return "PB更新";
+  return mode;
 }
 
 function escapeCsv(value: string | number | undefined) {
@@ -394,8 +413,22 @@ function sanitizeStore(raw: Partial<Store>): Store {
     plans,
     pbs: raw.pbs ?? [],
     pastRaces: raw.pastRaces ?? [],
-    settings: raw.settings ?? defaultSettings
+    settings: sanitizeSettings(raw.settings ?? defaultSettings)
   };
+}
+
+function sanitizeSettings(settings: Settings): Settings {
+  return {
+    climbSec: sanitizeAdjustValue(settings.climbSec, defaultSettings.climbSec),
+    descentSec: sanitizeAdjustValue(settings.descentSec, defaultSettings.descentSec),
+    flatSec: sanitizeAdjustValue(settings.flatSec, defaultSettings.flatSec)
+  };
+}
+
+function sanitizeAdjustValue(value: string | undefined, fallback: string) {
+  const numeric = n(value ?? "", Number.NaN);
+  if (!Number.isFinite(numeric) || numeric < -120 || numeric > 120) return fallback;
+  return String(Math.round(numeric));
 }
 
 function getTerrainAdjustment(km: number, segments: ElevationSegment[]) {
@@ -534,6 +567,7 @@ export default function App() {
   const [pastForm, setPastForm] = useState<PastRace>(emptyPast);
   const [raceSearch, setRaceSearch] = useState("");
   const [activePicker, setActivePicker] = useState<string | null>(null);
+  const [planSavedMessage, setPlanSavedMessage] = useState("");
 
   const selectedRace = store.races.find((race) => race.id === store.selectedRaceId) ?? store.races[0];
   const selectedRaceId = selectedRace?.id ?? "";
@@ -560,6 +594,7 @@ export default function App() {
   const tightestGateRow = gateRows.filter((row) => row.gateMarginSec != null).sort((a, b) => (a.gateMarginSec ?? Infinity) - (b.gateMarginSec ?? Infinity))[0];
   const predictedOfficialGoalSec = paceRows.length ? n(selectedRace?.lostTimeMin ?? "0") * 60 + paceRows[paceRows.length - 1].cumulativeSec : selectedOfficialTargetSec;
   const finishZone = subLabel(predictedOfficialGoalSec);
+  const showSubLabel = isFullMarathon(selectedRace);
   const attentionComment = minMargin == null
     ? "関門を登録すると、どこに余裕が少ないか確認できます。"
     : minMargin < 0
@@ -629,7 +664,8 @@ export default function App() {
 
   function saveSegment() {
     if (!selectedRaceId) return Alert.alert("大会未選択", "先に大会を登録してください。");
-    const nextSegment = { ...segmentForm, id: segmentForm.id || uid(), raceId: selectedRaceId };
+    const fallback = segmentForm.terrain === "上り" ? defaultSettings.climbSec : segmentForm.terrain === "下り" ? defaultSettings.descentSec : defaultSettings.flatSec;
+    const nextSegment = { ...segmentForm, adjustSecPerKm: sanitizeAdjustValue(segmentForm.adjustSecPerKm, fallback), id: segmentForm.id || uid(), raceId: selectedRaceId };
     const exists = store.segments.some((segment) => segment.id === nextSegment.id);
     updateStore({
       ...store,
@@ -663,6 +699,7 @@ export default function App() {
     const nextPlan = { ...planForm, id: planForm.id || selectedPlan?.id || uid(), raceId: selectedRaceId };
     const exists = store.plans.some((plan) => plan.id === nextPlan.id);
     updateStore({ ...store, plans: exists ? store.plans.map((plan) => (plan.id === nextPlan.id ? nextPlan : plan)) : [...store.plans, nextPlan] });
+    setPlanSavedMessage("保存しました。ホームとペース表に反映済みです。");
   }
 
   function savePb() {
@@ -814,8 +851,9 @@ export default function App() {
           <Text style={styles.heroTitle}>{selectedRace?.name || "大会未登録"}</Text>
           <Text style={styles.muted}>{selectedRace ? `${selectedRace.date} / ${selectedRace.location} / ${selectedRace.category}` : "大会登録タブから追加してください"}</Text>
           <View style={styles.judgementBox}>
-            <Text style={[styles.judgementText, homeStatus !== "-" && statusStyle(homeStatus)]}>{finishZone}</Text>
-            <Text style={styles.body}>予測ゴール {formatDurationJa(predictedOfficialGoalSec)} / 完走判定 {homeJudgement}</Text>
+            {showSubLabel && <Text style={styles.subJudgementText}>{finishZone}</Text>}
+            <Text style={styles.resultLine}>予測ゴール {formatDurationJa(predictedOfficialGoalSec)}</Text>
+            <Text style={styles.resultLine}>完走判定 <Text style={[homeJudgement === "完走可能" && styles.resultOk, homeJudgement === "関門アウト" && styles.resultDanger]}>{homeJudgement}</Text></Text>
           </View>
           <View style={styles.grid2}>
             <Metric label="関門余裕" value={`最小${formatMinutesLabel(minMargin)} / 最大${formatMinutesLabel(maxMargin)}`} />
@@ -968,7 +1006,16 @@ export default function App() {
               <Input label="区間開始距離" value={segmentForm.startKm} onChangeText={(v) => setField(setSegmentForm, "startKm", v)} keyboardType="decimal-pad" />
               <Input label="区間終了距離" value={segmentForm.endKm} onChangeText={(v) => setField(setSegmentForm, "endKm", v)} keyboardType="decimal-pad" />
               <Segment value={segmentForm.terrain} values={["上り", "下り", "平坦"]} onChange={(v) => setSegmentForm((prev) => ({ ...prev, terrain: v as ElevationSegment["terrain"], adjustSecPerKm: v === "上り" ? store.settings.climbSec : v === "下り" ? store.settings.descentSec : store.settings.flatSec }))} />
-              <Input label="補正秒数 / km" value={segmentForm.adjustSecPerKm} onChangeText={(v) => setField(setSegmentForm, "adjustSecPerKm", v)} keyboardType="numbers-and-punctuation" />
+              <SelectField
+                label="補正 秒/km"
+                value={sanitizeAdjustValue(segmentForm.adjustSecPerKm, segmentForm.terrain === "上り" ? "10" : segmentForm.terrain === "下り" ? "-5" : "0")}
+                options={ADJUST_OPTIONS}
+                displayValue={(value) => `${Number(value) > 0 ? "+" : ""}${value}秒/km`}
+                pickerId="segment-adjust"
+                activePicker={activePicker}
+                setActivePicker={setActivePicker}
+                onSelect={(value) => setField(setSegmentForm, "adjustSecPerKm", value)}
+              />
               <PrimaryButton label={segmentForm.id ? "更新する" : "保存する"} onPress={saveSegment} />
             </Card>
             {raceSegments.map((segment) => (
@@ -1005,30 +1052,54 @@ export default function App() {
             <Text style={styles.sectionTitle}>関門・ゴール逆算プラン</Text>
             <RacePicker races={raceOptions} selectedId={selectedRaceId} onSelect={(id) => {
               selectRace(id);
+              setPlanSavedMessage("");
               const existing = store.plans.find((plan) => plan.raceId === id);
               setPlanForm(existing ?? { ...emptyPlan, raceId: id });
             }} />
+            <View style={styles.explainBox}>
+              <Text style={styles.explainTitle}>計算の考え方</Text>
+              <Text style={styles.body}>入力方法は「何時間でゴールするか」を決めます。ペースタイプは「前半と後半にどう配分するか」を決めます。</Text>
+            </View>
             <Text style={styles.label}>入力方法</Text>
-            <Segment value={planForm.inputMode ?? "制限時間内で完走"} values={["制限時間内で完走", "目標ゴールタイムを狙う", "自己ベスト更新を狙う"]} onChange={(v) => setPlanForm((prev) => ({ ...prev, inputMode: v as Plan["inputMode"] }))} />
+            <Segment value={planForm.inputMode ?? "制限時間内で完走"} values={["制限時間内で完走", "目標ゴールタイムを狙う", "自己ベスト更新を狙う"]} labelForValue={planModeShortLabel} onChange={(v) => {
+              setPlanSavedMessage("");
+              setPlanForm((prev) => ({ ...prev, inputMode: v as Plan["inputMode"] }));
+            }} />
             <Text style={styles.helpText}>{planModeDescription(planForm.inputMode)}</Text>
             {(planForm.inputMode ?? "制限時間内で完走") === "目標ゴールタイムを狙う" && (
-              <Input label="目標ゴールタイム" value={planForm.targetTime} onChangeText={(v) => setField(setPlanForm, "targetTime", v)} placeholder="05:30:00" />
+              <Input label="目標ゴールタイム" value={planForm.targetTime} onChangeText={(v) => {
+                setPlanSavedMessage("");
+                setField(setPlanForm, "targetTime", v);
+              }} placeholder="05:30:00" />
             )}
             {planForm.inputMode === "自己ベスト更新を狙う" && (
               <>
-                <Input label="PBより何分速く狙うか" value={planForm.pbTargetOffsetMin ?? "3"} onChangeText={(v) => setField(setPlanForm, "pbTargetOffsetMin", v)} keyboardType="number-pad" />
+                <Input label="PBより何分速く狙うか" value={planForm.pbTargetOffsetMin ?? "3"} onChangeText={(v) => {
+                  setPlanSavedMessage("");
+                  setField(setPlanForm, "pbTargetOffsetMin", v);
+                }} keyboardType="number-pad" />
                 <Text style={styles.helpText}>フルPB: {formatDuration(getFullPbSeconds(store.pbs))} / 提案目標: {formatDuration(getPlanOfficialTargetSeconds(selectedRace, planForm, store.pbs))}</Text>
               </>
             )}
             <Text style={styles.label}>ペースタイプ</Text>
-            <Segment value={normalizedPaceType(planForm.paceType)} values={["安全完走型", "一定ペース型", "後半温存型"]} onChange={(v) => setPlanForm((prev) => ({ ...prev, paceType: v as Plan["paceType"] }))} />
+            <Segment value={normalizedPaceType(planForm.paceType)} values={["安全完走型", "一定ペース型", "後半温存型"]} onChange={(v) => {
+              setPlanSavedMessage("");
+              setPlanForm((prev) => ({ ...prev, paceType: v as Plan["paceType"] }));
+            }} />
             <Text style={styles.helpText}>{paceTypeDescription(planForm.paceType)}</Text>
-            <Input label="関門余裕の目安 分" value={planForm.gateBufferMin} onChangeText={(v) => setField(setPlanForm, "gateBufferMin", v)} keyboardType="number-pad" />
+            <Input label="最低ほしい関門余裕（分）" value={planForm.gateBufferMin} onChangeText={(v) => {
+              setPlanSavedMessage("");
+              setField(setPlanForm, "gateBufferMin", v);
+            }} keyboardType="number-pad" />
+            <Text style={styles.helpText}>現在は表示確認用です。自動補正は次の改善候補として残しています。</Text>
             <View style={styles.planPreview}>
+              <Metric label="ゴール目標の決め方" value={planTargetLabel(planForm.inputMode)} />
+              <Metric label="配分方法" value={normalizedPaceType(planForm.paceType)} />
               <Metric label="予測ゴール" value={formatDuration(getPlanOfficialTargetSeconds(selectedRace, planForm, store.pbs))} />
               <Metric label="必要な平均ペース" value={selectedRace && getPlanTargetSeconds(selectedRace, planForm, store.pbs) ? formatPace(((getPlanTargetSeconds(selectedRace, planForm, store.pbs) ?? 0) - totalStopSec) / Math.max(n(selectedRace.distanceKm), 1)) : "-"} />
             </View>
             <PrimaryButton label="保存・再計算" onPress={savePlan} />
+            {!!planSavedMessage && <Text style={styles.savedText}>{planSavedMessage}</Text>}
           </Card>
         )}
         {planSection === "出力" && (
@@ -1173,13 +1244,42 @@ export default function App() {
   }
 
   function renderSettings() {
+    const adjustLabel = (value: string) => `${Number(value) > 0 ? "+" : ""}${value}秒/km`;
     return (
       <Card>
         <Text style={styles.sectionTitle}>設定</Text>
         <Text style={styles.body}>保存先: スマホ内保存。クラウド保存は準備中として設計のみ残しています。</Text>
-        <Input label="上り 初期補正 秒/km" value={store.settings.climbSec} onChangeText={(v) => updateStore({ ...store, settings: { ...store.settings, climbSec: v } })} />
-        <Input label="下り 初期補正 秒/km" value={store.settings.descentSec} onChangeText={(v) => updateStore({ ...store, settings: { ...store.settings, descentSec: v } })} />
-        <Input label="平坦 初期補正 秒/km" value={store.settings.flatSec} onChangeText={(v) => updateStore({ ...store, settings: { ...store.settings, flatSec: v } })} />
+        <Text style={styles.helpText}>高低差は「1kmあたり何秒増減するか」を選びます。迷ったら初期値のままで大丈夫です。</Text>
+        <SelectField
+          label="上り 初期補正"
+          value={sanitizeAdjustValue(store.settings.climbSec, defaultSettings.climbSec)}
+          options={ADJUST_OPTIONS}
+          displayValue={adjustLabel}
+          pickerId="setting-climb"
+          activePicker={activePicker}
+          setActivePicker={setActivePicker}
+          onSelect={(value) => updateStore({ ...store, settings: { ...store.settings, climbSec: value } })}
+        />
+        <SelectField
+          label="下り 初期補正"
+          value={sanitizeAdjustValue(store.settings.descentSec, defaultSettings.descentSec)}
+          options={ADJUST_OPTIONS}
+          displayValue={adjustLabel}
+          pickerId="setting-descent"
+          activePicker={activePicker}
+          setActivePicker={setActivePicker}
+          onSelect={(value) => updateStore({ ...store, settings: { ...store.settings, descentSec: value } })}
+        />
+        <SelectField
+          label="平坦 初期補正"
+          value={sanitizeAdjustValue(store.settings.flatSec, defaultSettings.flatSec)}
+          options={ADJUST_OPTIONS}
+          displayValue={adjustLabel}
+          pickerId="setting-flat"
+          activePicker={activePicker}
+          setActivePicker={setActivePicker}
+          onSelect={(value) => updateStore({ ...store, settings: { ...store.settings, flatSec: value } })}
+        />
         <View style={styles.rowGap}>
           <PrimaryButton label="データバックアップ" onPress={backupData} />
           <SecondaryButton label="データ復元" onPress={restoreSample} />
@@ -1211,7 +1311,8 @@ function SelectField({
   placeholder = "選択してください",
   pickerId,
   activePicker,
-  setActivePicker
+  setActivePicker,
+  displayValue
 }: {
   label: string;
   value: string;
@@ -1221,6 +1322,7 @@ function SelectField({
   pickerId?: string;
   activePicker?: string | null;
   setActivePicker?: (value: string | null) => void;
+  displayValue?: (value: string) => string;
 }) {
   const [localOpen, setLocalOpen] = useState(false);
   const disabled = options.length === 0;
@@ -1238,7 +1340,7 @@ function SelectField({
     <View style={styles.inputWrap}>
       <Text style={styles.label}>{label}</Text>
       <Pressable disabled={disabled} onPress={toggleOpen} style={[styles.selectButton, disabled && styles.selectButtonDisabled]}>
-        <Text style={[styles.selectText, !value && styles.selectPlaceholder]}>{value || placeholder}</Text>
+        <Text style={[styles.selectText, !value && styles.selectPlaceholder]}>{value ? displayValue?.(value) ?? value : placeholder}</Text>
         <Text style={styles.selectArrow}>{open ? "▲" : "▼"}</Text>
       </Pressable>
       <Modal visible={open && !disabled} transparent animationType="fade" onRequestClose={closePicker}>
@@ -1260,7 +1362,7 @@ function SelectField({
                   }}
                   style={[styles.selectOption, value === option && styles.selectOptionActive]}
                 >
-                  <Text style={[styles.selectOptionText, value === option && styles.selectOptionTextActive]}>{option}</Text>
+                  <Text style={[styles.selectOptionText, value === option && styles.selectOptionTextActive]}>{displayValue?.(option) ?? option}</Text>
                 </Pressable>
               ))}
             </ScrollView>
@@ -1441,12 +1543,12 @@ function DangerButton({ label, onPress }: { label: string; onPress: () => void }
   );
 }
 
-function Segment({ value, values, onChange }: { value: string; values: string[]; onChange: (value: string) => void }) {
+function Segment({ value, values, onChange, labelForValue }: { value: string; values: string[]; onChange: (value: string) => void; labelForValue?: (value: string) => string }) {
   return (
     <View style={styles.segment}>
       {values.map((item) => (
         <Pressable key={item} onPress={() => onChange(item)} style={[styles.segmentItem, value === item && styles.segmentItemActive]}>
-          <Text style={[styles.segmentText, value === item && styles.segmentTextActive]} numberOfLines={1}>{item}</Text>
+          <Text style={[styles.segmentText, value === item && styles.segmentTextActive]} numberOfLines={1}>{labelForValue?.(item) ?? item}</Text>
         </Pressable>
       ))}
     </View>
@@ -1533,23 +1635,30 @@ const styles = StyleSheet.create({
   appName: { fontSize: 22, fontWeight: "800", color: "#263238" },
   appSub: { marginTop: 3, color: "#61716a", fontSize: 13 },
   content: { flex: 1 },
-  contentInner: { padding: 14, paddingBottom: 24 },
+  contentInner: { padding: 14, paddingBottom: 110 },
   card: { backgroundColor: "#fffdf8", borderWidth: 1, borderColor: "#e2ded2", borderRadius: 8, padding: 16, marginBottom: 12, shadowColor: "#000", shadowOpacity: 0.05, shadowOffset: { width: 0, height: 2 }, shadowRadius: 8, elevation: 1 },
   sectionTitle: { fontSize: 15, fontWeight: "800", color: "#31423b", marginBottom: 8 },
   heroTitle: { fontSize: 24, fontWeight: "900", color: "#263238", marginBottom: 5 },
   muted: { color: "#6d766f", fontSize: 13, lineHeight: 19 },
   body: { color: "#42514a", fontSize: 14, lineHeight: 21 },
-  helpText: { color: "#5d6d65", fontSize: 12, lineHeight: 18, marginTop: -6, marginBottom: 10 },
+  helpText: { color: "#5d6d65", fontSize: 12, lineHeight: 18, marginTop: 2, marginBottom: 12 },
   noticeText: { marginTop: 12, color: "#6b4d10", backgroundColor: "#fff4d6", borderRadius: 8, padding: 10, fontSize: 13, lineHeight: 19, fontWeight: "700" },
   judgementBox: { backgroundColor: "#f0f5ef", borderRadius: 8, padding: 12, marginTop: 12 },
   judgementText: { color: "#263238", fontSize: 24, fontWeight: "900", marginBottom: 4 },
+  subJudgementText: { color: "#263238", fontSize: 23, fontWeight: "900", marginBottom: 6 },
+  resultLine: { color: "#263238", fontSize: 16, fontWeight: "800", lineHeight: 24 },
+  resultOk: { color: "#1f5fbf", fontWeight: "900" },
+  resultDanger: { color: "#b3261e", fontWeight: "900" },
+  explainBox: { backgroundColor: "#eef5f8", borderRadius: 8, padding: 12, marginBottom: 12 },
+  explainTitle: { color: "#2f4d5d", fontSize: 13, fontWeight: "900", marginBottom: 4 },
+  savedText: { marginTop: 10, color: "#1f5fbf", backgroundColor: "#e7eef8", borderRadius: 8, padding: 10, fontSize: 13, fontWeight: "900" },
   grid2: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 12 },
-  metric: { width: "48%", minHeight: 68, backgroundColor: "#f0f5ef", borderRadius: 8, padding: 10, justifyContent: "center" },
-  metricLabel: { color: "#68766e", fontSize: 12, marginBottom: 5 },
-  metricValue: { color: "#263238", fontSize: 16, fontWeight: "800" },
+  metric: { width: "48%", minHeight: 74, backgroundColor: "#f0f5ef", borderRadius: 8, padding: 10, justifyContent: "center" },
+  metricLabel: { color: "#68766e", fontSize: 12, lineHeight: 17, marginBottom: 5 },
+  metricValue: { color: "#263238", fontSize: 16, lineHeight: 21, fontWeight: "800" },
   metricCard: { backgroundColor: "#fffdf8", borderWidth: 1, borderColor: "#e2ded2", borderRadius: 8, padding: 16, marginBottom: 10 },
-  inputWrap: { flex: 1, minWidth: 0, marginBottom: 10 },
-  label: { fontSize: 12, color: "#526158", fontWeight: "700", marginBottom: 5 },
+  inputWrap: { flex: 1, minWidth: 0, marginBottom: 16 },
+  label: { fontSize: 12, lineHeight: 18, color: "#526158", fontWeight: "700", marginBottom: 6 },
   input: { minHeight: 44, backgroundColor: "#ffffff", borderColor: "#d8d7cd", borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, color: "#263238", fontSize: 15 },
   textarea: { minHeight: 76, paddingTop: 10, textAlignVertical: "top" },
   selectButton: { minHeight: 44, backgroundColor: "#ffffff", borderColor: "#d8d7cd", borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
@@ -1594,9 +1703,9 @@ const styles = StyleSheet.create({
   dangerButtonText: { color: "#a83429", fontWeight: "800", fontSize: 13 },
   rowGap: { gap: 9 },
   buttonRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
-  planPreview: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 10 },
-  segment: { flexDirection: "row", backgroundColor: "#e8e3d8", borderRadius: 8, padding: 4, marginBottom: 12 },
-  segmentItem: { flex: 1, minHeight: 36, alignItems: "center", justifyContent: "center", borderRadius: 6, paddingHorizontal: 4 },
+  planPreview: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 2, marginBottom: 12 },
+  segment: { flexDirection: "row", backgroundColor: "#e8e3d8", borderRadius: 8, padding: 4, marginBottom: 14 },
+  segmentItem: { flex: 1, minHeight: 40, alignItems: "center", justifyContent: "center", borderRadius: 6, paddingHorizontal: 4 },
   segmentItemActive: { backgroundColor: "#fffdf8" },
   segmentText: { color: "#66736d", fontWeight: "700", fontSize: 12 },
   segmentTextActive: { color: "#176b51" },
