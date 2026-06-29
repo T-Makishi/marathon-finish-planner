@@ -859,6 +859,7 @@ export default function App() {
     return (
       <>
         <View style={styles.homeHero}>
+          <Image source={RUNNER_BACKGROUND} style={styles.homeRunnerWatermark} resizeMode="cover" />
           <View style={styles.raceFocusCard}>
             <Text style={styles.darkLabel}>対象大会</Text>
             <Text style={styles.darkRaceTitle}>{selectedRace?.name || "大会未登録"}</Text>
@@ -1682,8 +1683,8 @@ function badgeStyle(tone: StatusLabel) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#f3f1ec" },
   appBackground: { flex: 1 },
-  appBackgroundImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%", opacity: 0.74 },
-  appOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(247,245,240,0.62)" },
+  appBackgroundImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%", opacity: 0.72 },
+  appOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(247,245,240,0.50)" },
   loading: { margin: 24, color: "#263238" },
   header: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 8, backgroundColor: "transparent" },
   appName: { fontSize: 34, lineHeight: 38, fontWeight: "900", color: "#101514", letterSpacing: 0 },
@@ -1697,14 +1698,15 @@ const styles = StyleSheet.create({
   body: { color: "#42514a", fontSize: 14, lineHeight: 21 },
   helpText: { color: "#5d6d65", fontSize: 12, lineHeight: 18, marginTop: 2, marginBottom: 12 },
   noticeText: { marginTop: 12, color: "#6b4d10", backgroundColor: "#fff4d6", borderRadius: 8, padding: 10, fontSize: 13, lineHeight: 19, fontWeight: "700" },
-  homeHero: { gap: 10, marginBottom: 12 },
-  raceFocusCard: { backgroundColor: "rgba(15,17,16,0.82)", borderRadius: 8, padding: 16, minHeight: 110, justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.16)" },
+  homeHero: { gap: 10, marginBottom: 12, overflow: "hidden" },
+  homeRunnerWatermark: { position: "absolute", top: 18, right: -18, width: "52%", height: 560, opacity: 0.34, borderRadius: 8 },
+  raceFocusCard: { backgroundColor: "rgba(15,17,16,0.84)", borderRadius: 8, padding: 16, minHeight: 110, justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.16)" },
   darkLabel: { color: "#ffffff", fontSize: 13, fontWeight: "900", marginBottom: 8 },
   darkRaceTitle: { color: "#ffffff", fontSize: 23, lineHeight: 29, fontWeight: "900" },
   darkRaceMeta: { color: "rgba(255,255,255,0.88)", fontSize: 13, lineHeight: 19, marginTop: 6, fontWeight: "800" },
   homeMetricGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  glassMetric: { width: "48%", minHeight: 86, backgroundColor: "rgba(255,255,255,0.78)", borderWidth: 1, borderColor: "rgba(255,255,255,0.78)", borderRadius: 8, padding: 12, justifyContent: "center" },
-  glassWidePanel: { backgroundColor: "rgba(255,255,255,0.78)", borderWidth: 1, borderColor: "rgba(255,255,255,0.78)", borderRadius: 8, padding: 14 },
+  glassMetric: { width: "48%", minHeight: 86, backgroundColor: "rgba(255,255,255,0.72)", borderWidth: 1, borderColor: "rgba(255,255,255,0.82)", borderRadius: 8, padding: 12, justifyContent: "center" },
+  glassWidePanel: { backgroundColor: "rgba(255,255,255,0.72)", borderWidth: 1, borderColor: "rgba(255,255,255,0.82)", borderRadius: 8, padding: 14 },
   homeMetricLabel: { color: "#26302c", fontSize: 12, lineHeight: 17, fontWeight: "800", marginBottom: 4 },
   homeMetricValue: { color: "#111817", fontSize: 21, lineHeight: 27, fontWeight: "900" },
   homeJudgeText: { fontSize: 24, lineHeight: 30, fontWeight: "900" },
