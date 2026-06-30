@@ -107,6 +107,7 @@ type Settings = {
   descentSec: string;
   flatSec: string;
   openingBackgroundUri?: string;
+  homeHeroImageUri?: string;
 };
 
 type Store = {
@@ -140,8 +141,9 @@ type StatusLabel = "安全" | "注意" | "危険" | "関門アウト" | "-";
 
 const STORAGE_KEY = "marathon-finish-planner-v1";
 const OPENING_BACKGROUND = require("./assets/opening-background.jpg");
+const HOME_HERO_BACKGROUND = require("./assets/home-hero-runner.png");
 const OPENING_LOGO = require("./assets/run-to-chebis-logo-white.png");
-const defaultSettings: Settings = { climbSec: "10", descentSec: "-5", flatSec: "0", openingBackgroundUri: "" };
+const defaultSettings: Settings = { climbSec: "10", descentSec: "-5", flatSec: "0", openingBackgroundUri: "", homeHeroImageUri: "" };
 const emptyRace: Race = {
   id: "",
   name: "",
@@ -429,7 +431,8 @@ function sanitizeSettings(settings: Settings): Settings {
     climbSec: sanitizeAdjustValue(settings.climbSec, defaultSettings.climbSec),
     descentSec: sanitizeAdjustValue(settings.descentSec, defaultSettings.descentSec),
     flatSec: sanitizeAdjustValue(settings.flatSec, defaultSettings.flatSec),
-    openingBackgroundUri: settings.openingBackgroundUri ?? ""
+    openingBackgroundUri: settings.openingBackgroundUri ?? "",
+    homeHeroImageUri: settings.homeHeroImageUri ?? ""
   };
 }
 
@@ -619,6 +622,7 @@ export default function App() {
     .filter((race) => race.name.includes(raceSearch.trim()) || race.location.includes(raceSearch.trim()))
     .sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0));
   const openingBackgroundSource = store.settings.openingBackgroundUri ? { uri: store.settings.openingBackgroundUri } : OPENING_BACKGROUND;
+  const homeHeroImageSource = store.settings.homeHeroImageUri ? { uri: store.settings.homeHeroImageUri } : HOME_HERO_BACKGROUND;
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
@@ -869,32 +873,50 @@ export default function App() {
     Alert.alert("復元", "サンプルを復元しました。バックアップJSONからの復元UIは将来拡張用です。");
   }
 
-  async function pickOpeningBackground() {
+  async function pickLocalImage(filePrefix: string) {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert("写真へのアクセス", "背景画像を選ぶには写真ライブラリへのアクセス許可が必要です。");
-      return;
+      Alert.alert("写真へのアクセス", "画像を選ぶには写真ライブラリへのアクセス許可が必要です。");
+      return null;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: false,
       quality: 0.82
     });
-    if (result.canceled || !result.assets[0]?.uri) return;
+    if (result.canceled || !result.assets[0]?.uri) return null;
     const pickedUri = result.assets[0].uri;
     let savedUri = pickedUri;
     if (Platform.OS !== "web" && FileSystem.documentDirectory) {
       const extension = pickedUri.split(".").pop()?.split("?")[0] || "jpg";
-      savedUri = `${FileSystem.documentDirectory}opening-background-custom.${extension}`;
+      savedUri = `${FileSystem.documentDirectory}${filePrefix}.${extension}`;
       await FileSystem.copyAsync({ from: pickedUri, to: savedUri });
     }
+    return savedUri;
+  }
+
+  async function pickOpeningBackground() {
+    const savedUri = await pickLocalImage("opening-background-custom");
+    if (!savedUri) return;
     updateStore({ ...store, settings: { ...store.settings, openingBackgroundUri: savedUri } });
-    Alert.alert("設定しました", "次回のオープニングとホームの大会カードに反映されます。");
+    Alert.alert("設定しました", "次回のオープニング背景に反映されます。");
   }
 
   function resetOpeningBackground() {
     updateStore({ ...store, settings: { ...store.settings, openingBackgroundUri: "" } });
     Alert.alert("標準に戻しました", "標準のオープニング背景画像を使います。");
+  }
+
+  async function pickHomeHeroImage() {
+    const savedUri = await pickLocalImage("home-hero-custom");
+    if (!savedUri) return;
+    updateStore({ ...store, settings: { ...store.settings, homeHeroImageUri: savedUri } });
+    Alert.alert("設定しました", "ホームの対象大会カードに反映されます。");
+  }
+
+  function resetHomeHeroImage() {
+    updateStore({ ...store, settings: { ...store.settings, homeHeroImageUri: "" } });
+    Alert.alert("標準に戻しました", "標準のホームヒーロー画像を使います。");
   }
 
   function clearAll() {
@@ -988,7 +1010,7 @@ export default function App() {
       <>
         <View style={styles.homeHero}>
           <View style={styles.raceFocusCard}>
-            <Image source={openingBackgroundSource} style={styles.raceFocusImage} resizeMode="cover" />
+            <Image source={homeHeroImageSource} style={styles.raceFocusImage} resizeMode="cover" />
             <View style={styles.raceFocusShade} />
             <View style={styles.raceFocusContent}>
               <Text style={styles.darkLabel}>対象大会</Text>
@@ -1452,6 +1474,24 @@ export default function App() {
           <View style={styles.buttonRow}>
             <SecondaryButton label="画像を選択" onPress={pickOpeningBackground} />
             <SecondaryButton label="標準画像に戻す" onPress={resetOpeningBackground} />
+          </View>
+        </View>
+        <View style={styles.settingBlock}>
+          <Text style={styles.sectionTitle}>ホームのヒーロー画像</Text>
+          <Text style={styles.body}>現在: {store.settings.homeHeroImageUri ? "自分で選んだ画像" : "標準画像"}</Text>
+          <Text style={styles.helpText}>ホーム画面の「対象大会」カードに使う画像です。オープニング背景画像とは別に保存されます。推奨: 縦長9:16または横長16:9、JPGまたはPNG、2MB前後まで。</Text>
+          <View style={styles.openingPreview}>
+            <Image source={homeHeroImageSource} style={styles.openingPreviewImage} resizeMode="cover" />
+            <View style={styles.openingPreviewShade} />
+            <View style={styles.heroPreviewTextBlock}>
+              <Text style={styles.darkLabel}>対象大会</Text>
+              <Text style={styles.darkRaceTitle}>{selectedRace?.name || "大会未登録"}</Text>
+              <Text style={styles.darkRaceMeta}>{selectedRace?.date || "2026-11-01"} / {selectedRace?.location || "開催地未登録"}</Text>
+            </View>
+          </View>
+          <View style={styles.buttonRow}>
+            <SecondaryButton label="画像を選択" onPress={pickHomeHeroImage} />
+            <SecondaryButton label="標準画像に戻す" onPress={resetHomeHeroImage} />
           </View>
         </View>
         <Text style={styles.helpText}>高低差は「1kmあたり何秒増減するか」を選びます。迷ったら初期値のままで大丈夫です。</Text>
@@ -1926,6 +1966,7 @@ const styles = StyleSheet.create({
   openingPreviewImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
   openingPreviewShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.52)" },
   openingPreviewLogo: { width: "78%", height: 82 },
+  heroPreviewTextBlock: { position: "absolute", left: 16, right: 16, bottom: 16 },
   calendarBox: { backgroundColor: "#ffffff", padding: 12 },
   calendarHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
   calendarNav: { minHeight: 34, minWidth: 58, borderRadius: 8, backgroundColor: "#e6eee8", alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
