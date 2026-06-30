@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system";
+import * as ImagePicker from "expo-image-picker";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { StatusBar } from "expo-status-bar";
@@ -105,6 +106,7 @@ type Settings = {
   climbSec: string;
   descentSec: string;
   flatSec: string;
+  openingBackgroundUri?: string;
 };
 
 type Store = {
@@ -139,7 +141,7 @@ type StatusLabel = "安全" | "注意" | "危険" | "関門アウト" | "-";
 const STORAGE_KEY = "marathon-finish-planner-v1";
 const OPENING_BACKGROUND = require("./assets/opening-background.jpg");
 const OPENING_LOGO = require("./assets/run-to-chebis-logo-white.png");
-const defaultSettings: Settings = { climbSec: "10", descentSec: "-5", flatSec: "0" };
+const defaultSettings: Settings = { climbSec: "10", descentSec: "-5", flatSec: "0", openingBackgroundUri: "" };
 const emptyRace: Race = {
   id: "",
   name: "",
@@ -426,7 +428,8 @@ function sanitizeSettings(settings: Settings): Settings {
   return {
     climbSec: sanitizeAdjustValue(settings.climbSec, defaultSettings.climbSec),
     descentSec: sanitizeAdjustValue(settings.descentSec, defaultSettings.descentSec),
-    flatSec: sanitizeAdjustValue(settings.flatSec, defaultSettings.flatSec)
+    flatSec: sanitizeAdjustValue(settings.flatSec, defaultSettings.flatSec),
+    openingBackgroundUri: settings.openingBackgroundUri ?? ""
   };
 }
 
@@ -615,6 +618,7 @@ export default function App() {
   const sortedRaces = [...store.races]
     .filter((race) => race.name.includes(raceSearch.trim()) || race.location.includes(raceSearch.trim()))
     .sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0));
+  const openingBackgroundSource = store.settings.openingBackgroundUri ? { uri: store.settings.openingBackgroundUri } : OPENING_BACKGROUND;
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
@@ -865,6 +869,34 @@ export default function App() {
     Alert.alert("復元", "サンプルを復元しました。バックアップJSONからの復元UIは将来拡張用です。");
   }
 
+  async function pickOpeningBackground() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("写真へのアクセス", "背景画像を選ぶには写真ライブラリへのアクセス許可が必要です。");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 0.82
+    });
+    if (result.canceled || !result.assets[0]?.uri) return;
+    const pickedUri = result.assets[0].uri;
+    let savedUri = pickedUri;
+    if (Platform.OS !== "web" && FileSystem.documentDirectory) {
+      const extension = pickedUri.split(".").pop()?.split("?")[0] || "jpg";
+      savedUri = `${FileSystem.documentDirectory}opening-background-custom.${extension}`;
+      await FileSystem.copyAsync({ from: pickedUri, to: savedUri });
+    }
+    updateStore({ ...store, settings: { ...store.settings, openingBackgroundUri: savedUri } });
+    Alert.alert("設定しました", "次回のオープニングとホームの大会カードに反映されます。");
+  }
+
+  function resetOpeningBackground() {
+    updateStore({ ...store, settings: { ...store.settings, openingBackgroundUri: "" } });
+    Alert.alert("標準に戻しました", "標準のオープニング背景画像を使います。");
+  }
+
   function clearAll() {
     Alert.alert("全データ削除", "スマホ内保存データを削除します。", [
       { text: "キャンセル", style: "cancel" },
@@ -918,7 +950,7 @@ export default function App() {
 
     return (
       <Pressable style={styles.openingScreen} onPress={() => setShowOpening(false)}>
-        <Image source={OPENING_BACKGROUND} style={styles.openingImage} resizeMode="cover" />
+        <Image source={openingBackgroundSource} style={styles.openingImage} resizeMode="cover" />
         <View style={styles.openingShade} />
         <View style={styles.openingCenter}>
           <Animated.Image
@@ -956,9 +988,21 @@ export default function App() {
       <>
         <View style={styles.homeHero}>
           <View style={styles.raceFocusCard}>
-            <Text style={styles.darkLabel}>対象大会</Text>
-            <Text style={styles.darkRaceTitle}>{selectedRace?.name || "大会未登録"}</Text>
-            <Text style={styles.darkRaceMeta}>{selectedRace ? `${selectedRace.date} / ${selectedRace.location} / ${selectedRace.category}` : "大会登録タブから追加してください"}</Text>
+            <Image source={openingBackgroundSource} style={styles.raceFocusImage} resizeMode="cover" />
+            <View style={styles.raceFocusShade} />
+            <View style={styles.raceFocusContent}>
+              <Text style={styles.darkLabel}>対象大会</Text>
+              <Text style={styles.darkRaceTitle}>{selectedRace?.name || "大会未登録"}</Text>
+              {selectedRace ? (
+                <>
+                  <Text style={styles.darkRaceMeta}>日付 {selectedRace.date || "-"}</Text>
+                  <Text style={styles.darkRaceMeta}>場所 {selectedRace.location || "-"}</Text>
+                </>
+              ) : (
+                <Text style={styles.darkRaceMeta}>大会登録タブから追加してください</Text>
+              )}
+            </View>
+            <Text style={styles.raceFocusArrow}>›</Text>
           </View>
 
           <View style={styles.homeMetricGrid}>
@@ -1396,6 +1440,20 @@ export default function App() {
       <Card>
         <Text style={styles.sectionTitle}>設定</Text>
         <Text style={styles.body}>保存先: スマホ内保存。クラウド保存は準備中として設計のみ残しています。</Text>
+        <View style={styles.settingBlock}>
+          <Text style={styles.sectionTitle}>オープニング背景画像</Text>
+          <Text style={styles.body}>現在: {store.settings.openingBackgroundUri ? "自分で選んだ画像" : "標準画像"}</Text>
+          <Text style={styles.helpText}>推奨: 縦長9:16、JPGまたはPNG、2MB前後まで。暗めの写真や余白のある写真だと、白いロゴと文字が読みやすくなります。選んだ画像はこの端末内だけに保存されます。</Text>
+          <View style={styles.openingPreview}>
+            <Image source={openingBackgroundSource} style={styles.openingPreviewImage} resizeMode="cover" />
+            <View style={styles.openingPreviewShade} />
+            <Image source={OPENING_LOGO} style={styles.openingPreviewLogo} resizeMode="contain" />
+          </View>
+          <View style={styles.buttonRow}>
+            <SecondaryButton label="画像を選択" onPress={pickOpeningBackground} />
+            <SecondaryButton label="標準画像に戻す" onPress={resetOpeningBackground} />
+          </View>
+        </View>
         <Text style={styles.helpText}>高低差は「1kmあたり何秒増減するか」を選びます。迷ったら初期値のままで大丈夫です。</Text>
         <SelectField
           label="上り 初期補正"
@@ -1694,7 +1752,7 @@ function Segment({ value, values, onChange, labelForValue }: { value: string; va
   return (
     <View style={styles.segment}>
       {values.map((item) => (
-        <Pressable key={item} onPress={() => onChange(item)} style={[styles.segmentItem, value === item && styles.segmentItemActive]}>
+        <Pressable key={item} onPress={() => onChange(item)} style={[styles.segmentItem, { width: `${100 / values.length}%` }, value === item && styles.segmentItemActive]}>
           <Text style={[styles.segmentText, value === item && styles.segmentTextActive]} numberOfLines={1}>{labelForValue?.(item) ?? item}</Text>
         </Pressable>
       ))}
@@ -1803,7 +1861,11 @@ const styles = StyleSheet.create({
   helpText: { color: "#5d6d65", fontSize: 12, lineHeight: 18, marginTop: 2, marginBottom: 12 },
   noticeText: { marginTop: 12, color: "#6b4d10", backgroundColor: "#fff4d6", borderRadius: 8, padding: 10, fontSize: 13, lineHeight: 19, fontWeight: "700" },
   homeHero: { gap: 10, marginBottom: 12, overflow: "hidden" },
-  raceFocusCard: { backgroundColor: "rgba(15,17,16,0.84)", borderRadius: 8, padding: 16, minHeight: 110, justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.16)" },
+  raceFocusCard: { backgroundColor: "rgba(15,17,16,0.84)", borderRadius: 8, padding: 16, minHeight: 168, justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", overflow: "hidden" },
+  raceFocusImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
+  raceFocusShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.48)" },
+  raceFocusContent: { position: "relative", zIndex: 1, maxWidth: "82%" },
+  raceFocusArrow: { position: "absolute", right: 16, top: "46%", zIndex: 2, color: "rgba(255,255,255,0.90)", fontSize: 36, lineHeight: 40, fontWeight: "300" },
   darkLabel: { color: "#ffffff", fontSize: 13, fontWeight: "900", marginBottom: 8 },
   darkRaceTitle: { color: "#ffffff", fontSize: 23, lineHeight: 29, fontWeight: "900" },
   darkRaceMeta: { color: "rgba(255,255,255,0.88)", fontSize: 13, lineHeight: 19, marginTop: 6, fontWeight: "800" },
@@ -1859,6 +1921,11 @@ const styles = StyleSheet.create({
   twoColumn: { flexDirection: "row", gap: 10 },
   limitSummary: { backgroundColor: "#f0f5ef", borderRadius: 8, padding: 12, marginBottom: 10, gap: 4 },
   limitText: { color: "#31423b", fontSize: 13, fontWeight: "800" },
+  settingBlock: { borderTopWidth: 1, borderTopColor: "#ebe7dc", borderBottomWidth: 1, borderBottomColor: "#ebe7dc", paddingVertical: 14, marginTop: 14, marginBottom: 14 },
+  openingPreview: { height: 170, borderRadius: 8, overflow: "hidden", backgroundColor: "#111817", alignItems: "center", justifyContent: "center", marginTop: 8 },
+  openingPreviewImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
+  openingPreviewShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.52)" },
+  openingPreviewLogo: { width: "78%", height: 82 },
   calendarBox: { backgroundColor: "#ffffff", padding: 12 },
   calendarHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
   calendarNav: { minHeight: 34, minWidth: 58, borderRadius: 8, backgroundColor: "#e6eee8", alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
@@ -1882,7 +1949,7 @@ const styles = StyleSheet.create({
   buttonRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
   planPreview: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 2, marginBottom: 12 },
   segment: { flexDirection: "row", backgroundColor: "#e8e3d8", borderRadius: 8, padding: 4, marginBottom: 14 },
-  segmentItem: { flex: 1, minHeight: 40, alignItems: "center", justifyContent: "center", borderRadius: 6, paddingHorizontal: 4 },
+  segmentItem: { flexGrow: 0, flexShrink: 0, minWidth: 0, minHeight: 40, alignItems: "center", justifyContent: "center", borderRadius: 6, paddingHorizontal: 4 },
   segmentItemActive: { backgroundColor: "#fffdf8" },
   segmentText: { color: "#66736d", fontWeight: "700", fontSize: 12 },
   segmentTextActive: { color: "#176b51" },
