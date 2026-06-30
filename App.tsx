@@ -3,9 +3,12 @@ import * as FileSystem from "expo-file-system";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { StatusBar } from "expo-status-bar";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Animated,
+  Easing,
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -14,8 +17,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View,
-  Image
+  View
 } from "react-native";
 import { JAPAN_MUNICIPALITIES } from "./data/japanMunicipalities";
 
@@ -135,7 +137,8 @@ type PaceRow = {
 type StatusLabel = "安全" | "注意" | "危険" | "関門アウト" | "-";
 
 const STORAGE_KEY = "marathon-finish-planner-v1";
-const RUNNER_BACKGROUND = require("./assets/runner-monochrome.jpg");
+const OPENING_BACKGROUND = require("./assets/opening-background.jpg");
+const OPENING_LOGO = require("./assets/run-to-chebis-logo-white.png");
 const defaultSettings: Settings = { climbSec: "10", descentSec: "-5", flatSec: "0" };
 const emptyRace: Race = {
   id: "",
@@ -555,6 +558,7 @@ function createInitialStore(): Store {
 export default function App() {
   const [store, setStore] = useState<Store>(createInitialStore);
   const [ready, setReady] = useState(false);
+  const [showOpening, setShowOpening] = useState(true);
   const [tab, setTab] = useState("ホーム");
   const [raceSection, setRaceSection] = useState("大会");
   const [planSection, setPlanSection] = useState("作成");
@@ -570,6 +574,10 @@ export default function App() {
   const [raceSearch, setRaceSearch] = useState("");
   const [activePicker, setActivePicker] = useState<string | null>(null);
   const [planSavedMessage, setPlanSavedMessage] = useState("");
+  const openingLogoX = useRef(new Animated.Value(-420)).current;
+  const openingLogoOpacity = useRef(new Animated.Value(0)).current;
+  const openingCopyOpacity = useRef(new Animated.Value(0)).current;
+  const openingProgress = useRef(new Animated.Value(0)).current;
 
   const selectedRace = store.races.find((race) => race.id === store.selectedRaceId) ?? store.races[0];
   const selectedRaceId = selectedRace?.id ?? "";
@@ -620,6 +628,60 @@ export default function App() {
   useEffect(() => {
     if (ready) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(store)).catch(() => {});
   }, [ready, store]);
+
+  useEffect(() => {
+    if (!ready || !showOpening) return;
+    openingLogoX.setValue(-420);
+    openingLogoOpacity.setValue(0);
+    openingCopyOpacity.setValue(0);
+    openingProgress.setValue(0);
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(openingLogoOpacity, {
+          toValue: 1,
+          duration: 120,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true
+        }),
+        Animated.sequence([
+          Animated.timing(openingLogoX, {
+            toValue: 18,
+            duration: 760,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true
+          }),
+          Animated.timing(openingLogoX, {
+            toValue: -8,
+            duration: 180,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true
+          }),
+          Animated.timing(openingLogoX, {
+            toValue: 0,
+            duration: 160,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true
+          })
+        ])
+      ]),
+      Animated.parallel([
+        Animated.timing(openingCopyOpacity, {
+          toValue: 1,
+          duration: 260,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true
+        }),
+        Animated.timing(openingProgress, {
+          toValue: 1,
+          duration: 1120,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: false
+        })
+      ])
+    ]).start();
+    const timer = setTimeout(() => setShowOpening(false), 2600);
+    return () => clearTimeout(timer);
+  }, [openingCopyOpacity, openingLogoOpacity, openingLogoX, openingProgress, ready, showOpening]);
 
   useEffect(() => {
     setPlanForm(selectedPlan ?? { ...emptyPlan, raceId: selectedRaceId });
@@ -825,8 +887,6 @@ export default function App() {
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
       <View style={styles.appBackground}>
-        <Image source={RUNNER_BACKGROUND} style={styles.appBackgroundImage} resizeMode="cover" />
-        <View style={styles.appOverlay} />
         <View style={styles.header}>
           <Text style={styles.appName}>CHEBIS RUN</Text>
           <Text style={styles.appSub}>関門時間から完走ペースを逆算</Text>
@@ -845,9 +905,45 @@ export default function App() {
             </Pressable>
           ))}
         </View>
+        {showOpening && renderOpening()}
       </View>
     </SafeAreaView>
   );
+
+  function renderOpening() {
+    const progressWidth = openingProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: ["0%", "100%"]
+    });
+
+    return (
+      <Pressable style={styles.openingScreen} onPress={() => setShowOpening(false)}>
+        <Image source={OPENING_BACKGROUND} style={styles.openingImage} resizeMode="cover" />
+        <View style={styles.openingShade} />
+        <View style={styles.openingCenter}>
+          <Animated.Image
+            source={OPENING_LOGO}
+            style={[
+              styles.openingLogo,
+              {
+                opacity: openingLogoOpacity,
+                transform: [{ translateX: openingLogoX }]
+              }
+            ]}
+            resizeMode="contain"
+          />
+          <Animated.Text style={[styles.openingCopy, { opacity: openingCopyOpacity }]}>関門時間から完走ペースを逆算</Animated.Text>
+        </View>
+        <View style={styles.openingBottom}>
+          <View style={styles.openingProgressTrack}>
+            <Animated.View style={[styles.openingProgressFill, { width: progressWidth }]} />
+          </View>
+          <Text style={styles.openingBottomText}>Preparing your race plan...</Text>
+          <Text style={styles.openingSkipText}>タップでスキップ</Text>
+        </View>
+      </Pressable>
+    );
+  }
 
   function renderHome() {
     const planType = normalizedPaceType(selectedPlan?.paceType ?? "安全完走型");
@@ -859,7 +955,6 @@ export default function App() {
     return (
       <>
         <View style={styles.homeHero}>
-          <Image source={RUNNER_BACKGROUND} style={styles.homeRunnerWatermark} resizeMode="cover" />
           <View style={styles.raceFocusCard}>
             <Text style={styles.darkLabel}>対象大会</Text>
             <Text style={styles.darkRaceTitle}>{selectedRace?.name || "大会未登録"}</Text>
@@ -1682,9 +1777,18 @@ function badgeStyle(tone: StatusLabel) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#f3f1ec" },
-  appBackground: { flex: 1 },
-  appBackgroundImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%", opacity: 0.72 },
-  appOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(247,245,240,0.50)" },
+  appBackground: { flex: 1, backgroundColor: "#f3f1ec" },
+  openingScreen: { ...StyleSheet.absoluteFillObject, zIndex: 50, elevation: 50, backgroundColor: "#0b0d0c", alignItems: "center", justifyContent: "center" },
+  openingImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
+  openingShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.54)" },
+  openingCenter: { width: "100%", alignItems: "center", paddingHorizontal: 26 },
+  openingLogo: { width: "88%", maxWidth: 420, height: 124 },
+  openingCopy: { marginTop: 10, color: "#ffffff", fontSize: 16, lineHeight: 23, fontWeight: "800", textAlign: "center", textShadowColor: "rgba(0,0,0,0.42)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6 },
+  openingBottom: { position: "absolute", left: 36, right: 36, bottom: Platform.OS === "ios" ? 58 : 40, alignItems: "center" },
+  openingProgressTrack: { width: "100%", maxWidth: 300, height: 4, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.34)", overflow: "hidden" },
+  openingProgressFill: { height: "100%", borderRadius: 999, backgroundColor: "#18a66b" },
+  openingBottomText: { marginTop: 14, color: "#ffffff", fontSize: 13, lineHeight: 18, fontWeight: "700", textAlign: "center" },
+  openingSkipText: { marginTop: 8, color: "rgba(255,255,255,0.70)", fontSize: 11, lineHeight: 15, fontWeight: "700", textAlign: "center" },
   loading: { margin: 24, color: "#263238" },
   header: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 8, backgroundColor: "transparent" },
   appName: { fontSize: 34, lineHeight: 38, fontWeight: "900", color: "#101514", letterSpacing: 0 },
@@ -1699,7 +1803,6 @@ const styles = StyleSheet.create({
   helpText: { color: "#5d6d65", fontSize: 12, lineHeight: 18, marginTop: 2, marginBottom: 12 },
   noticeText: { marginTop: 12, color: "#6b4d10", backgroundColor: "#fff4d6", borderRadius: 8, padding: 10, fontSize: 13, lineHeight: 19, fontWeight: "700" },
   homeHero: { gap: 10, marginBottom: 12, overflow: "hidden" },
-  homeRunnerWatermark: { position: "absolute", top: 18, right: -18, width: "52%", height: 560, opacity: 0.34, borderRadius: 8 },
   raceFocusCard: { backgroundColor: "rgba(15,17,16,0.84)", borderRadius: 8, padding: 16, minHeight: 110, justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.16)" },
   darkLabel: { color: "#ffffff", fontSize: 13, fontWeight: "900", marginBottom: 8 },
   darkRaceTitle: { color: "#ffffff", fontSize: 23, lineHeight: 29, fontWeight: "900" },

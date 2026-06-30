@@ -19,7 +19,8 @@
       "package": "com.local.marathonfinishplanner"
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
     }
   }
 }
