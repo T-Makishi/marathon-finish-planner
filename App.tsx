@@ -16,6 +16,7 @@ import {
   SafeAreaView,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View
@@ -139,6 +140,7 @@ type Settings = {
   flatSec: string;
   openingBackgroundUri?: string;
   homeHeroImageUri?: string;
+  advancedFeaturesEnabled?: boolean;
 };
 
 type Store = {
@@ -176,7 +178,7 @@ const STORAGE_KEY = "marathon-finish-planner-v1";
 const OPENING_BACKGROUND = require("./assets/opening-background.jpg");
 const HOME_HERO_BACKGROUND = require("./assets/home-hero-runner.png");
 const OPENING_LOGO = require("./assets/run-to-chebis-logo-white.png");
-const defaultSettings: Settings = { climbSec: "10", descentSec: "-5", flatSec: "0", openingBackgroundUri: "", homeHeroImageUri: "" };
+const defaultSettings: Settings = { climbSec: "10", descentSec: "-5", flatSec: "0", openingBackgroundUri: "", homeHeroImageUri: "", advancedFeaturesEnabled: false };
 const emptyRace: Race = {
   id: "",
   name: "",
@@ -510,7 +512,8 @@ function sanitizeSettings(settings: Settings): Settings {
     descentSec: sanitizeAdjustValue(settings.descentSec, defaultSettings.descentSec),
     flatSec: sanitizeAdjustValue(settings.flatSec, defaultSettings.flatSec),
     openingBackgroundUri: settings.openingBackgroundUri ?? "",
-    homeHeroImageUri: settings.homeHeroImageUri ?? ""
+    homeHeroImageUri: settings.homeHeroImageUri ?? "",
+    advancedFeaturesEnabled: Boolean(settings.advancedFeaturesEnabled)
   };
 }
 
@@ -716,6 +719,7 @@ export default function App() {
     .sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0));
   const openingBackgroundSource = store.settings.openingBackgroundUri ? { uri: store.settings.openingBackgroundUri } : OPENING_BACKGROUND;
   const homeHeroImageSource = store.settings.homeHeroImageUri ? { uri: store.settings.homeHeroImageUri } : HOME_HERO_BACKGROUND;
+  const advancedFeaturesEnabled = Boolean(store.settings.advancedFeaturesEnabled);
   const trainingSummary = useMemo(() => summarizeTraining(store.trainingActivities), [store.trainingActivities]);
   const trainingScore = useMemo(
     () =>
@@ -1634,7 +1638,7 @@ export default function App() {
   }
 
   function renderRaceTab() {
-    const raceSections = ["大会", "関門", "給水P", "高低差"];
+    const raceSections = advancedFeaturesEnabled ? ["大会", "関門", "給水P", "高低差"] : ["大会", "関門", "給水P"];
     const activeRaceSection = raceSections.includes(raceSection) ? raceSection : "大会";
     return (
       <>
@@ -1780,6 +1784,13 @@ export default function App() {
   }
 
   function renderPlanTab() {
+    const normalizedPlanPaceType = normalizedPaceType(planForm.paceType);
+    const detailedPaceValue =
+      normalizedPlanPaceType === "後半温存型"
+        ? "前半ゆっくり後半アップ"
+        : normalizedPlanPaceType === "安全完走型"
+          ? "前半やや速め"
+          : "一定ペース";
     return (
       <>
         <Segment value={planSection} values={["作成", "ペース表", "出力", "過去比較"]} onChange={setPlanSection} />
@@ -1818,11 +1829,27 @@ export default function App() {
               </>
             )}
             <Text style={styles.label}>ペースタイプ</Text>
-            <Segment value={normalizedPaceType(planForm.paceType)} values={["安全完走型", "一定ペース型", "後半温存型"]} onChange={(v) => {
+            <Segment value={normalizedPlanPaceType} values={["安全完走型", "一定ペース型", "後半温存型"]} onChange={(v) => {
               setPlanSavedMessage("");
               setPlanForm((prev) => ({ ...prev, paceType: v as Plan["paceType"] }));
             }} />
             <Text style={styles.helpText}>{paceTypeDescription(planForm.paceType)}</Text>
+            {advancedFeaturesEnabled && (
+              <View style={styles.advancedPanel}>
+                <Text style={styles.sectionTitle}>詳細ペース配分</Text>
+                <Text style={styles.body}>同じペースタイプを、レース戦略の言葉で細かく確認できます。選択内容はペース表に反映されます。</Text>
+                <Segment
+                  value={detailedPaceValue}
+                  values={["一定ペース", "前半ゆっくり後半アップ", "前半やや速め"]}
+                  onChange={(value) => {
+                    setPlanSavedMessage("");
+                    const nextType = value === "前半ゆっくり後半アップ" ? "後半温存型" : value === "前半やや速め" ? "安全完走型" : "一定ペース型";
+                    setPlanForm((prev) => ({ ...prev, paceType: nextType as Plan["paceType"] }));
+                  }}
+                />
+                <Text style={styles.helpText}>今は「前後半で何分差」までは固定入力せず、既存の3タイプで安全に反映します。将来、任意の前後半差を追加できます。</Text>
+              </View>
+            )}
             <Input label="最低ほしい関門余裕（分）" value={planForm.gateBufferMin} onChangeText={(v) => {
               setPlanSavedMessage("");
               setField(setPlanForm, "gateBufferMin", v);
@@ -1855,53 +1882,105 @@ export default function App() {
   }
 
   function renderPaceTable() {
+    const goalRow = paceRows[paceRows.length - 1];
+    const summaryRows = [
+      ...Array.from({ length: Math.floor(n(selectedRace?.distanceKm ?? "0") / 5) }, (_, index) => (index + 1) * 5)
+        .map((km) => paceRows.find((row) => Math.abs(row.km - km) < 0.01))
+        .filter(Boolean) as PaceRow[],
+      ...(goalRow ? [goalRow] : [])
+    ].filter((row, index, rows) => rows.findIndex((item) => Math.abs(item.km - row.km) < 0.01) === index);
+
     return (
       <>
         <Card>
           <Text style={styles.sectionTitle}>ペース表</Text>
           <Text style={styles.body}>{selectedRace?.name ?? "大会未選択"} / 予測ゴール {formatDurationJa(predictedOfficialGoalSec)} / 平均 {formatPace(basePace)} / 関門余裕 最小{formatMinutesLabel(minMargin)}</Text>
+          <Text style={styles.helpText}>基本は5kmごとの目安を確認します。1kmごとの詳細や手動調整は、設定で「詳細機能を表示」をオンにすると使えます。</Text>
         </Card>
         <Card>
-          <Text style={styles.sectionTitle}>一部だけ手入力で調整</Text>
-          <Text style={styles.body}>坂道や混雑で一部の距離だけペースを変えたい場合に使います。保存すると、その後の通過予定を再計算します。</Text>
-          <View style={styles.twoColumn}>
-            <Input label="距離 km" value={manualForm.km} onChangeText={(v) => setField(setManualForm, "km", v)} keyboardType="decimal-pad" />
-            <Input label="予定ラップ" value={manualForm.lapTime} onChangeText={(v) => setField(setManualForm, "lapTime", v)} placeholder="07:15" />
+          <Text style={styles.sectionTitle}>5kmごとの目安</Text>
+          <View style={styles.summaryTableHeader}>
+            <Text style={styles.summaryTableCell}>距離</Text>
+            <Text style={styles.summaryTableCell}>通過予定</Text>
+            <Text style={styles.summaryTableCell}>ペース</Text>
           </View>
-          <View style={styles.buttonRow}>
-            <PrimaryButton label={manualForm.id ? "手動調整を更新" : "手動調整を保存"} onPress={saveManualLap} />
-            <SecondaryButton label="自動計算に戻す" onPress={() => updateStore({ ...store, manualLaps: store.manualLaps.filter((manual) => manual.raceId !== selectedRaceId) })} />
-          </View>
+          {summaryRows.length ? summaryRows.map((row) => (
+            <View key={`summary-${row.km}`} style={styles.summaryTableRow}>
+              <Text style={styles.summaryTableCell}>{row === goalRow ? "ゴール" : `${row.km.toFixed(0)}km`}</Text>
+              <Text style={styles.summaryTableCell}>{row.etaMinutes == null ? formatDuration(row.cumulativeSec) : addMinutesToClock("00:00", row.etaMinutes)}</Text>
+              <Text style={styles.summaryTableCell}>{formatPace(row.adjustedLapSec)}</Text>
+            </View>
+          )) : <Text style={styles.muted}>ペース表を作成すると表示されます。</Text>}
         </Card>
-        {paceRows.map((row) => (
-          <View key={`${row.km}`} style={styles.paceCard}>
-            <View style={styles.paceHead}>
-              <Text style={styles.kmText}>{row.gate?.distanceKm ?? row.km.toFixed(row.km % 1 ? 3 : 0)} km</Text>
-              <View style={styles.badgeRow}>
-                {row.manual && <Text style={styles.manualBadge}>手動調整</Text>}
-                {row.gate ? <Badge label={row.status} /> : <Text style={styles.muted}>通過</Text>}
+        {raceGates.length > 0 && (
+          <Card>
+            <Text style={styles.sectionTitle}>関門だけ確認</Text>
+            {gateRows.map((row) => (
+              <View key={`gate-only-${row.gate?.id}`} style={styles.gateSummary}>
+                <View style={styles.gateSummaryText}>
+                  <Text style={styles.listTitle}>{row.gate?.name} / {row.gate?.distanceKm ?? row.km}km</Text>
+                  <Text style={styles.muted}>関門 {row.gate?.gateTime} / 通過予定 {row.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes)}</Text>
+                </View>
+                <View style={styles.gateSummaryBadge}>
+                  <Text style={[styles.metricValue, statusStyle(row.status)]}>{formatMinutesLabel(row.gateMarginSec)}</Text>
+                  <Badge label={row.status} />
+                </View>
               </View>
-            </View>
-            <View style={styles.grid2}>
-              <Metric label="予定ラップ" value={formatDuration(row.adjustedLapSec)} />
-              <Metric label="通過予定" value={row.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes)} />
-              <Metric label="給水/停止" value={row.stopSec ? `+${row.stopSec}秒` : "-"} />
-              <Metric label="メモ" value={row.stopMemo || row.gate?.memo || "-"} />
-            </View>
-            {row.gate && (
-              <View style={styles.gateDetail}>
-                <Text style={styles.gateLine}>関門: {row.gate.name}</Text>
-                <Text style={styles.muted}>メモ: {row.gate.memo || "-"}</Text>
-                <Text style={styles.muted}>関門時刻: {row.gate.gateTime} / 通過予定: {row.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes)}</Text>
-                <Text style={[styles.gateMargin, statusStyle(row.status)]}>余裕 {formatMinutesLabel(row.gateMarginSec)}</Text>
+            ))}
+          </Card>
+        )}
+        {advancedFeaturesEnabled ? (
+          <>
+            <Card>
+              <Text style={styles.sectionTitle}>一部だけ手入力で調整</Text>
+              <Text style={styles.body}>坂道や混雑で一部の距離だけペースを変えたい場合に使います。保存すると、その後の通過予定を再計算します。</Text>
+              <View style={styles.twoColumn}>
+                <Input label="距離 km" value={manualForm.km} onChangeText={(v) => setField(setManualForm, "km", v)} keyboardType="decimal-pad" />
+                <Input label="予定ラップ" value={manualForm.lapTime} onChangeText={(v) => setField(setManualForm, "lapTime", v)} placeholder="07:15" />
               </View>
-            )}
-            <View style={styles.buttonRow}>
-              <SecondaryButton label="このラップを調整" onPress={() => setManualForm(row.manual ?? { ...emptyManualLap, raceId: selectedRaceId, km: String(row.km), lapTime: formatDuration(row.adjustedLapSec).slice(3) })} />
-              {row.manual && <DangerButton label="調整を解除" onPress={() => updateStore({ ...store, manualLaps: store.manualLaps.filter((manual) => manual.id !== row.manual?.id) })} />}
-            </View>
-          </View>
-        ))}
+              <View style={styles.buttonRow}>
+                <PrimaryButton label={manualForm.id ? "手動調整を更新" : "手動調整を保存"} onPress={saveManualLap} />
+                <SecondaryButton label="自動計算に戻す" onPress={() => updateStore({ ...store, manualLaps: store.manualLaps.filter((manual) => manual.raceId !== selectedRaceId) })} />
+              </View>
+            </Card>
+            <Text style={styles.sectionCaption}>1kmごとの詳細</Text>
+            {paceRows.map((row) => (
+              <View key={`${row.km}`} style={styles.paceCard}>
+                <View style={styles.paceHead}>
+                  <Text style={styles.kmText}>{row.gate?.distanceKm ?? row.km.toFixed(row.km % 1 ? 3 : 0)} km</Text>
+                  <View style={styles.badgeRow}>
+                    {row.manual && <Text style={styles.manualBadge}>手動調整</Text>}
+                    {row.gate ? <Badge label={row.status} /> : <Text style={styles.muted}>通過</Text>}
+                  </View>
+                </View>
+                <View style={styles.grid2}>
+                  <Metric label="予定ラップ" value={formatDuration(row.adjustedLapSec)} />
+                  <Metric label="通過予定" value={row.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes)} />
+                  <Metric label="給水/停止" value={row.stopSec ? `+${row.stopSec}秒` : "-"} />
+                  <Metric label="メモ" value={row.stopMemo || row.gate?.memo || "-"} />
+                </View>
+                {row.gate && (
+                  <View style={styles.gateDetail}>
+                    <Text style={styles.gateLine}>関門: {row.gate.name}</Text>
+                    <Text style={styles.muted}>メモ: {row.gate.memo || "-"}</Text>
+                    <Text style={styles.muted}>関門時刻: {row.gate.gateTime} / 通過予定: {row.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes)}</Text>
+                    <Text style={[styles.gateMargin, statusStyle(row.status)]}>余裕 {formatMinutesLabel(row.gateMarginSec)}</Text>
+                  </View>
+                )}
+                <View style={styles.buttonRow}>
+                  <SecondaryButton label="このラップを調整" onPress={() => setManualForm(row.manual ?? { ...emptyManualLap, raceId: selectedRaceId, km: String(row.km), lapTime: formatDuration(row.adjustedLapSec).slice(3) })} />
+                  {row.manual && <DangerButton label="調整を解除" onPress={() => updateStore({ ...store, manualLaps: store.manualLaps.filter((manual) => manual.id !== row.manual?.id) })} />}
+                </View>
+              </View>
+            ))}
+          </>
+        ) : (
+          <Card>
+            <Text style={styles.sectionTitle}>詳細ペース表</Text>
+            <Text style={styles.body}>1kmごとの一覧、手動ラップ調整、高低差を使った細かい確認は詳細機能で使えます。</Text>
+            <SecondaryButton label="設定で詳細機能をオンにする" onPress={() => setTab("設定")} />
+          </Card>
+        )}
       </>
     );
   }
@@ -1986,6 +2065,18 @@ export default function App() {
       <Card>
         <Text style={styles.sectionTitle}>設定</Text>
         <Text style={styles.body}>保存先: スマホ内保存。クラウド保存は準備中として設計のみ残しています。</Text>
+        <View style={styles.settingToggleRow}>
+          <View style={styles.settingToggleText}>
+            <Text style={styles.sectionTitle}>詳細機能を表示</Text>
+            <Text style={styles.helpText}>オンにすると、高低差、1km詳細ペース表、手動ラップ調整など上級者向けの項目を表示します。</Text>
+          </View>
+          <Switch
+            value={advancedFeaturesEnabled}
+            onValueChange={(value) => updateStore({ ...store, settings: { ...store.settings, advancedFeaturesEnabled: value } })}
+            trackColor={{ false: "#d8d5ca", true: "#b8d9cb" }}
+            thumbColor={advancedFeaturesEnabled ? "#176b51" : "#f7f5ee"}
+          />
+        </View>
         <View style={styles.settingBlock}>
           <Text style={styles.sectionTitle}>オープニング背景画像</Text>
           <Text style={styles.body}>現在: {store.settings.openingBackgroundUri ? "自分で選んだ画像" : "標準画像"}</Text>
@@ -2488,6 +2579,7 @@ const styles = StyleSheet.create({
   resultDanger: { color: "#b3261e", fontWeight: "900" },
   explainBox: { backgroundColor: "#eef5f8", borderRadius: 8, padding: 12, marginBottom: 12 },
   explainTitle: { color: "#2f4d5d", fontSize: 13, fontWeight: "900", marginBottom: 4 },
+  advancedPanel: { backgroundColor: "#f6f3ee", borderRadius: 8, borderWidth: 1, borderColor: "#e2ded2", padding: 12, marginBottom: 14 },
   savedText: { marginTop: 10, color: "#1f5fbf", backgroundColor: "#e7eef8", borderRadius: 8, padding: 10, fontSize: 13, fontWeight: "900" },
   grid2: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 12 },
   metric: { width: "48%", minHeight: 74, backgroundColor: "#f0f5ef", borderRadius: 8, padding: 10, justifyContent: "center" },
@@ -2519,6 +2611,8 @@ const styles = StyleSheet.create({
   twoColumn: { flexDirection: "row", gap: 10 },
   limitSummary: { backgroundColor: "#f0f5ef", borderRadius: 8, padding: 12, marginBottom: 10, gap: 4 },
   limitText: { color: "#31423b", fontSize: 13, fontWeight: "800" },
+  settingToggleRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#f0f5ef", borderRadius: 8, padding: 12, marginTop: 12, marginBottom: 8 },
+  settingToggleText: { flex: 1 },
   settingBlock: { borderTopWidth: 1, borderTopColor: "#ebe7dc", borderBottomWidth: 1, borderBottomColor: "#ebe7dc", paddingVertical: 14, marginTop: 14, marginBottom: 14 },
   openingPreview: { height: 170, borderRadius: 8, overflow: "hidden", backgroundColor: "#111817", alignItems: "center", justifyContent: "center", marginTop: 8 },
   openingPreviewImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
@@ -2575,6 +2669,10 @@ const styles = StyleSheet.create({
   gateSummary: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: "#ebe7dc", paddingTop: 10, marginTop: 10 },
   gateSummaryText: { flex: 1 },
   gateSummaryBadge: { alignItems: "flex-end", gap: 5 },
+  sectionCaption: { color: "#31423b", fontSize: 15, fontWeight: "900", marginBottom: 8, marginTop: 2 },
+  summaryTableHeader: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#d8d7cd", paddingBottom: 8, marginBottom: 4 },
+  summaryTableRow: { flexDirection: "row", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#efede5" },
+  summaryTableCell: { flex: 1, color: "#263238", fontSize: 13, lineHeight: 18, fontWeight: "800" },
   paceCard: { backgroundColor: "#fffdf8", borderColor: "#e2ded2", borderWidth: 1, borderRadius: 8, padding: 13, marginBottom: 10 },
   paceHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   kmText: { fontSize: 18, fontWeight: "900", color: "#263238" },
