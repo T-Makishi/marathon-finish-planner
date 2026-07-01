@@ -25,8 +25,13 @@ import { pickCsvFile } from "./src/services/filePickerService";
 import {
   buildImportedActivities,
   buildTrainingBatch,
+  calculateAveragePace,
   calculateReadinessScore,
+  normalizeActivityType,
   paceDifferenceLabel,
+  parseTrainingDate,
+  parseTrainingDistance,
+  parseTrainingDuration,
   parseTrainingCsv,
   summarizeTraining
 } from "./src/services/trainingCore";
@@ -119,6 +124,15 @@ type PastRace = {
   humidity: string;
 };
 
+type ManualTrainingForm = {
+  date: string;
+  activityType: string;
+  distanceKm: string;
+  duration: string;
+  averageHeartRate: string;
+  memo: string;
+};
+
 type Settings = {
   climbSec: string;
   descentSec: string;
@@ -185,6 +199,14 @@ const emptyStop: StopPoint = { id: "", raceId: "", distanceKm: "", stopSec: "30"
 const emptyManualLap: ManualLap = { id: "", raceId: "", km: "", lapTime: "" };
 const emptyPb: PBRecord = { id: "", event: "フル", raceName: "", date: "", time: "", memo: "" };
 const emptyPast: PastRace = { id: "", raceName: "", year: "", category: "フル", finishTime: "", weather: "", temperature: "", humidity: "" };
+const emptyManualTrainingForm: ManualTrainingForm = {
+  date: "",
+  activityType: "ランニング",
+  distanceKm: "",
+  duration: "",
+  averageHeartRate: "",
+  memo: ""
+};
 
 const PREFECTURE_MUNICIPALITIES: Record<string, string[]> = JAPAN_MUNICIPALITIES;
 const PREFECTURES = Object.keys(PREFECTURE_MUNICIPALITIES);
@@ -631,6 +653,7 @@ export default function App() {
   const [trainingSection, setTrainingSection] = useState("概要");
   const [trainingImportOpen, setTrainingImportOpen] = useState(false);
   const [trainingGuideOpen, setTrainingGuideOpen] = useState(false);
+  const [trainingManualOpen, setTrainingManualOpen] = useState(false);
   const [trainingSourceApp, setTrainingSourceApp] = useState<TrainingSourceApp>("garmin");
   const [trainingFileName, setTrainingFileName] = useState("");
   const [trainingCsvText, setTrainingCsvText] = useState("");
@@ -638,6 +661,7 @@ export default function App() {
   const [trainingParseResult, setTrainingParseResult] = useState<TrainingParseResult | null>(null);
   const [trainingDuplicateMode, setTrainingDuplicateMode] = useState<"exclude" | "all">("exclude");
   const [trainingImportMessage, setTrainingImportMessage] = useState("");
+  const [manualTrainingForm, setManualTrainingForm] = useState<ManualTrainingForm>(emptyManualTrainingForm);
   const [raceForm, setRaceForm] = useState<Race>(emptyRace);
   const [gateForm, setGateForm] = useState<Gate>(emptyGate);
   const [segmentForm, setSegmentForm] = useState<ElevationSegment>(emptySegment);
@@ -887,6 +911,63 @@ export default function App() {
     setTrainingMapping({});
     setTrainingParseResult(null);
     setTrainingDuplicateMode("exclude");
+  }
+
+  function openManualTrainingEntry() {
+    const today = new Date();
+    const localDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    setManualTrainingForm({ ...emptyManualTrainingForm, date: localDate });
+    setTrainingManualOpen(true);
+    setTrainingImportMessage("");
+  }
+
+  function saveManualTrainingActivity() {
+    const date = parseTrainingDate(manualTrainingForm.date);
+    if (!date) {
+      Alert.alert("日付形式を判定できません", "日付は 2026-07-01 のように入力してください。");
+      return;
+    }
+    const distanceKm = parseTrainingDistance(manualTrainingForm.distanceKm, "距離(km)");
+    if (!distanceKm) {
+      Alert.alert("距離の単位を判定できません", "距離は km 単位の数字で入力してください。例: 5.2");
+      return;
+    }
+    const durationSeconds = parseTrainingDuration(manualTrainingForm.duration, "other");
+    if (!durationSeconds) {
+      Alert.alert("時間形式を判定できません", "時間は 00:31:20 または 31:20 のように入力してください。");
+      return;
+    }
+    const activityType = manualTrainingForm.activityType.trim() || "ランニング";
+    const normalizedActivityType = normalizeActivityType(activityType);
+    const averageHeartRate = manualTrainingForm.averageHeartRate.trim() ? Number(manualTrainingForm.averageHeartRate) : undefined;
+    if (averageHeartRate != null && (!Number.isFinite(averageHeartRate) || averageHeartRate <= 0)) {
+      Alert.alert("平均心拍を確認してください", "平均心拍は数字で入力してください。空欄でも保存できます。");
+      return;
+    }
+    const averagePaceSecondsPerKm = calculateAveragePace(durationSeconds, distanceKm);
+    if (averagePaceSecondsPerKm == null) {
+      Alert.alert("平均ペースを計算できません", "距離と時間を確認してください。");
+      return;
+    }
+    const importedAt = new Date().toISOString();
+    const activity: TrainingActivity = {
+      id: `manual-${uid()}`,
+      date,
+      activityType,
+      normalizedActivityType,
+      distanceKm,
+      durationSeconds,
+      averagePaceSecondsPerKm,
+      averageHeartRate,
+      sourceApp: "other",
+      memo: manualTrainingForm.memo.trim(),
+      importedAt,
+      importBatchId: "manual"
+    };
+    updateStore({ ...store, trainingActivities: [activity, ...store.trainingActivities] });
+    setTrainingManualOpen(false);
+    setTrainingSection("概要");
+    setTrainingImportMessage("手入力の練習を保存しました。");
   }
 
   async function chooseTrainingCsvFile() {
@@ -1208,6 +1289,12 @@ export default function App() {
             <Text style={styles.raceFocusArrow}>›</Text>
           </View>
 
+          <View style={styles.homeRaceSelector}>
+            <Text style={styles.homeMetricLabel}>対象大会を選択</Text>
+            <Text style={styles.helpText}>ここで選んだ大会が、ホーム・大会・プラン・練習分析に反映されます。</Text>
+            <RacePicker races={raceOptions} selectedId={selectedRaceId} onSelect={selectRace} />
+          </View>
+
           <View style={styles.homeMetricGrid}>
             <View style={styles.glassMetric}>
               <Text style={styles.homeMetricLabel}>予測ゴール</Text>
@@ -1258,10 +1345,6 @@ export default function App() {
           <Text style={styles.noticeText}>注意: {attentionComment}</Text>
         </View>
         <Card>
-          <Text style={styles.sectionTitle}>対象大会</Text>
-          <RacePicker races={raceOptions} selectedId={selectedRaceId} onSelect={selectRace} />
-        </Card>
-        <Card>
           <Text style={styles.sectionTitle}>関門チェック</Text>
           {gateRows.length ? (
             gateRows.map((row) => (
@@ -1298,6 +1381,7 @@ export default function App() {
           <Text style={styles.helpText}>練習データはこの端末内に保存され、CSVデータを外部サーバーへ送信しません。元CSVファイル全体は保存しません。</Text>
           <View style={styles.rowGap}>
             <PrimaryButton label="CSVを取り込む" onPress={openTrainingImport} />
+            <SecondaryButton label="練習を手入力" onPress={openManualTrainingEntry} />
             <SecondaryButton label="取込方法を見る" onPress={() => setTrainingGuideOpen(true)} />
           </View>
           {!!trainingImportMessage && <Text style={styles.savedText}>{trainingImportMessage}</Text>}
@@ -1370,6 +1454,7 @@ export default function App() {
           </Card>
         )}
         {renderTrainingImportModal()}
+        {renderManualTrainingModal()}
         {renderTrainingGuideModal()}
       </>
     );
@@ -1484,6 +1569,45 @@ export default function App() {
     );
   }
 
+  function renderManualTrainingModal() {
+    return (
+      <Modal visible={trainingManualOpen} animationType="slide" onRequestClose={() => setTrainingManualOpen(false)}>
+        <SafeAreaView style={styles.safe}>
+          <View style={styles.modalPage}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>練習を手入力</Text>
+              <Pressable onPress={() => setTrainingManualOpen(false)} style={styles.modalCloseButton}>
+                <Text style={styles.modalCloseText}>閉じる</Text>
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={styles.modalPageInner} keyboardShouldPersistTaps="handled">
+              <Card>
+                <Text style={styles.sectionTitle}>1回分の練習を追加</Text>
+                <Text style={styles.body}>CSVを用意できない場合でも、スマホから練習記録を手入力できます。保存後は練習分析の集計に反映されます。</Text>
+                <Input label="日付" value={manualTrainingForm.date} onChangeText={(v) => setField(setManualTrainingForm, "date", v)} placeholder="2026-07-01" />
+                <SelectField
+                  label="種目"
+                  value={manualTrainingForm.activityType}
+                  options={["ランニング", "ウォーキング", "自転車", "水泳", "その他"]}
+                  onSelect={(value) => setField(setManualTrainingForm, "activityType", value)}
+                />
+                <Input label="距離 km" value={manualTrainingForm.distanceKm} onChangeText={(v) => setField(setManualTrainingForm, "distanceKm", v)} keyboardType="decimal-pad" placeholder="5.2" />
+                <Input label="時間" value={manualTrainingForm.duration} onChangeText={(v) => setField(setManualTrainingForm, "duration", v)} placeholder="00:31:20" />
+                <Input label="平均心拍（任意）" value={manualTrainingForm.averageHeartRate} onChangeText={(v) => setField(setManualTrainingForm, "averageHeartRate", v)} keyboardType="number-pad" placeholder="142" />
+                <Input label="メモ（任意）" value={manualTrainingForm.memo} onChangeText={(v) => setField(setManualTrainingForm, "memo", v)} placeholder="ゆっくり走、ペース走など" multiline />
+                <Text style={styles.helpText}>平均ペースは距離と時間から自動計算します。ランニング以外は保存できますが、主要集計には含まれません。</Text>
+                <View style={styles.buttonRow}>
+                  <PrimaryButton label="保存する" onPress={saveManualTrainingActivity} />
+                  <SecondaryButton label="キャンセル" onPress={() => setTrainingManualOpen(false)} />
+                </View>
+              </Card>
+            </ScrollView>
+          </View>
+        </SafeAreaView>
+      </Modal>
+    );
+  }
+
   function renderTrainingGuideModal() {
     return (
       <Modal visible={trainingGuideOpen} animationType="slide" onRequestClose={() => setTrainingGuideOpen(false)}>
@@ -1510,17 +1634,15 @@ export default function App() {
   }
 
   function renderRaceTab() {
+    const raceSections = ["大会", "関門", "給水P", "高低差"];
+    const activeRaceSection = raceSections.includes(raceSection) ? raceSection : "大会";
     return (
       <>
-        <Segment value={raceSection} values={["大会", "関門", "給水P", "高低差", "設定"]} onChange={(value) => {
+        <Segment value={activeRaceSection} values={raceSections} onChange={(value) => {
           setActivePicker(null);
           setRaceSection(value);
         }} />
-        <Card>
-          <Text style={styles.sectionTitle}>対象大会</Text>
-          <RacePicker races={raceOptions} selectedId={selectedRaceId} onSelect={selectRace} />
-        </Card>
-        {raceSection === "大会" && (
+        {activeRaceSection === "大会" && (
           <>
             <Card>
               <Text style={styles.sectionTitle}>{raceForm.id ? "大会を編集" : "大会登録"}</Text>
@@ -1590,7 +1712,7 @@ export default function App() {
             </Card>
           </>
         )}
-        {raceSection === "関門" && (
+        {activeRaceSection === "関門" && (
           <>
             <Card>
               <Text style={styles.sectionTitle}>{gateForm.id ? "関門を編集" : "関門登録"}</Text>
@@ -1614,7 +1736,7 @@ export default function App() {
             })}
           </>
         )}
-        {raceSection === "高低差" && (
+        {activeRaceSection === "高低差" && (
           <>
             <Card>
               <Text style={styles.sectionTitle}>高低差補正</Text>
@@ -1638,7 +1760,7 @@ export default function App() {
             ))}
           </>
         )}
-        {(raceSection === "給水P" || raceSection === "給水") && (
+        {activeRaceSection === "給水P" && (
           <>
             <Card>
               <Text style={styles.sectionTitle}>{stopForm.id ? "給水/停止を編集" : "給水/停止ポイント"}</Text>
@@ -1653,7 +1775,6 @@ export default function App() {
             ))}
           </>
         )}
-        {raceSection === "設定" && renderSettings()}
       </>
     );
   }
@@ -1938,22 +2059,14 @@ export default function App() {
   }
 
   function renderSettingsTab() {
+    const settingsSections = ["設定", "PB", "過去比較"];
+    const activeSettingsSection = settingsSections.includes(settingsSection) ? settingsSection : "設定";
     return (
       <>
-        <Segment value={settingsSection} values={["設定", "PB", "過去比較", "出力"]} onChange={setSettingsSection} />
-        {settingsSection === "設定" && renderSettings()}
-        {settingsSection === "PB" && renderPbTab()}
-        {settingsSection === "過去比較" && renderPastRace()}
-        {settingsSection === "出力" && (
-          <Card>
-            <Text style={styles.sectionTitle}>ペース表の出力</Text>
-            <Text style={styles.body}>現在のペース表をCSVまたはA4縦PDFで出力します。練習データのバックアップは設定の「データバックアップ」に含まれます。</Text>
-            <View style={styles.rowGap}>
-              <PrimaryButton label="CSV出力" onPress={exportCsv} />
-              <SecondaryButton label="PDF出力" onPress={exportPdf} />
-            </View>
-          </Card>
-        )}
+        <Segment value={activeSettingsSection} values={settingsSections} onChange={setSettingsSection} />
+        {activeSettingsSection === "設定" && renderSettings()}
+        {activeSettingsSection === "PB" && renderPbTab()}
+        {activeSettingsSection === "過去比較" && renderPastRace()}
       </>
     );
   }
@@ -2350,6 +2463,7 @@ const styles = StyleSheet.create({
   raceFocusShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.48)" },
   raceFocusContent: { position: "relative", zIndex: 1, maxWidth: "82%" },
   raceFocusArrow: { position: "absolute", right: 16, top: "46%", zIndex: 2, color: "rgba(255,255,255,0.90)", fontSize: 36, lineHeight: 40, fontWeight: "300" },
+  homeRaceSelector: { backgroundColor: "rgba(255,255,255,0.86)", borderRadius: 8, padding: 12, borderWidth: 1, borderColor: "rgba(44,54,50,0.12)", gap: 8 },
   darkLabel: { color: "#ffffff", fontSize: 13, fontWeight: "900", marginBottom: 8 },
   darkRaceTitle: { color: "#ffffff", fontSize: 23, lineHeight: 29, fontWeight: "900" },
   darkRaceMeta: { color: "rgba(255,255,255,0.88)", fontSize: 13, lineHeight: 19, marginTop: 6, fontWeight: "800" },
