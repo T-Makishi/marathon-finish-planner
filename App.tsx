@@ -22,6 +22,8 @@ import {
   View
 } from "react-native";
 import { JAPAN_MUNICIPALITIES } from "./data/japanMunicipalities";
+import { OFFICIAL_RACE_DATA, OfficialRaceData, RaceDataCategory, RaceDataDifficulty, RaceDataStatus } from "./src/data/raceData";
+import { calculateFiveKmPacePlan, CoursePaceStrategy } from "./src/services/coursePacePlanner";
 import { pickCsvFile } from "./src/services/filePickerService";
 import {
   buildImportedActivities,
@@ -58,6 +60,11 @@ type Race = {
   limitTime: string;
   lostTimeMin?: string;
   lastUsedAt?: number;
+  raceDataId?: string;
+  raceDataYear?: string;
+  raceDataStatus?: string;
+  officialSourceTitle?: string;
+  officialAccessedAt?: string;
   officialUrl: string;
   memo: string;
 };
@@ -87,6 +94,9 @@ type Plan = {
   targetTime: string;
   pbTargetOffsetMin?: string;
   paceType: "安全完走型" | "一定ペース型" | "後半温存型" | "イーブンペース" | "前半抑えめ" | "後半型" | "関門安全重視";
+  splitStrategy?: CoursePaceStrategy;
+  splitDifferenceMin?: string;
+  customSplitDifferenceMin?: string;
   gateBufferMin: string;
 };
 
@@ -196,7 +206,7 @@ const emptyRace: Race = {
 };
 const emptyGate: Gate = { id: "", raceId: "", name: "", distanceKm: "", gateTime: "", memo: "" };
 const emptySegment: ElevationSegment = { id: "", raceId: "", startKm: "", endKm: "", terrain: "上り", adjustSecPerKm: "10" };
-const emptyPlan: Plan = { id: "", raceId: "", inputMode: "制限時間内で完走", targetTime: "05:30:00", pbTargetOffsetMin: "3", paceType: "安全完走型", gateBufferMin: "10" };
+const emptyPlan: Plan = { id: "", raceId: "", inputMode: "制限時間内で完走", targetTime: "05:30:00", pbTargetOffsetMin: "3", paceType: "安全完走型", splitStrategy: "even", splitDifferenceMin: "0", customSplitDifferenceMin: "", gateBufferMin: "10" };
 const emptyStop: StopPoint = { id: "", raceId: "", distanceKm: "", stopSec: "30", memo: "" };
 const emptyManualLap: ManualLap = { id: "", raceId: "", km: "", lapTime: "" };
 const emptyPb: PBRecord = { id: "", event: "フル", raceName: "", date: "", time: "", memo: "" };
@@ -222,6 +232,11 @@ const CATEGORY_DISTANCE: Record<string, string> = {
 };
 const MINUTE_OPTIONS = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
 const ADJUST_OPTIONS = ["-30", "-20", "-15", "-10", "-5", "0", "5", "10", "15", "20", "30", "45", "60"];
+const RACE_DATA_MONTH_OPTIONS = ["", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
+const RACE_DATA_CATEGORY_OPTIONS: Array<"" | RaceDataCategory> = ["", "full", "half", "ultra", "other"];
+const RACE_DATA_STATUS_OPTIONS: Array<"" | RaceDataStatus> = ["", "verified", "partially-verified", "previous-year", "unverified", "awaiting-official"];
+const RACE_DATA_DIFFICULTY_OPTIONS: Array<"" | RaceDataDifficulty> = ["", "easy", "normal", "hard", "very-hard"];
+const SPLIT_DIFF_OPTIONS = ["0", "5", "10", "15", "20", "custom"];
 
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const n = (value: string, fallback = 0) => {
@@ -487,7 +502,10 @@ function sanitizeStore(raw: Partial<Store>): Store {
     ...plan,
     inputMode: (plan.inputMode as string) === "申告ペース" || (plan.inputMode as string) === "目標タイム" ? "目標ゴールタイムを狙う" : plan.inputMode ?? "制限時間内で完走",
     paceType: normalizedPaceType(plan.paceType ?? "安全完走型"),
-    pbTargetOffsetMin: plan.pbTargetOffsetMin ?? "3"
+    pbTargetOffsetMin: plan.pbTargetOffsetMin ?? "3",
+    splitStrategy: plan.splitStrategy ?? defaultStrategyForPaceType(plan.paceType ?? "安全完走型"),
+    splitDifferenceMin: plan.splitDifferenceMin ?? "0",
+    customSplitDifferenceMin: plan.customSplitDifferenceMin ?? ""
   }));
   return {
     ...initial,
@@ -533,6 +551,77 @@ function normalizedPaceType(type: Plan["paceType"]) {
   if (type === "イーブンペース") return "一定ペース型";
   if (type === "前半抑えめ" || type === "後半型") return "後半温存型";
   return type;
+}
+
+function splitStrategyLabel(value: string) {
+  if (value === "negative") return "ネガティブ";
+  if (value === "positive") return "ポジティブ";
+  return "イーブン";
+}
+
+function splitStrategyDescription(value?: CoursePaceStrategy) {
+  if (value === "negative") return "前半を少し抑えて、後半を速める配分です。余力を残したい時に使います。";
+  if (value === "positive") return "前半を少し速めて、後半に余裕を持たせる配分です。関門が前半に厳しい時に使います。";
+  return "前半と後半をできるだけ同じ時間で走る配分です。迷ったらここから始めます。";
+}
+
+function splitDiffMinutes(plan?: Plan) {
+  if (!plan) return 0;
+  if (plan.splitDifferenceMin === "custom") return Math.max(0, n(plan.customSplitDifferenceMin ?? "0"));
+  return Math.max(0, n(plan.splitDifferenceMin ?? "0"));
+}
+
+function defaultStrategyForPaceType(type?: Plan["paceType"]): CoursePaceStrategy {
+  const normalized = normalizedPaceType(type ?? "安全完走型");
+  if (normalized === "後半温存型") return "negative";
+  if (normalized === "安全完走型") return "positive";
+  return "even";
+}
+
+function raceDataCategoryLabel(value: string) {
+  if (value === "full") return "フル";
+  if (value === "half") return "ハーフ";
+  if (value === "ultra") return "ウルトラ";
+  if (value === "other") return "その他";
+  return "すべて";
+}
+
+function raceDataStatusLabel(value: string) {
+  if (value === "verified") return "確認済み";
+  if (value === "partially-verified") return "一部確認済み";
+  if (value === "previous-year") return "前年度情報";
+  if (value === "unverified") return "未確認";
+  if (value === "awaiting-official") return "公式発表待ち";
+  return "すべて";
+}
+
+function raceDataDifficultyLabel(value: string | undefined) {
+  if (value === "easy") return "やさしめ";
+  if (value === "normal") return "標準";
+  if (value === "hard") return "起伏あり";
+  if (value === "very-hard") return "かなり厳しい";
+  return "未設定";
+}
+
+function terrainLabel(value: string) {
+  if (value === "uphill") return "上り";
+  if (value === "downhill") return "下り";
+  if (value === "rolling") return "起伏";
+  if (value === "mixed") return "混在";
+  if (value === "flat") return "平坦";
+  return "未確認";
+}
+
+function raceCategoryFromData(category: RaceDataCategory) {
+  if (category === "full") return "フルマラソン";
+  if (category === "half") return "ハーフマラソン";
+  if (category === "ultra") return "ウルトラマラソン";
+  return "その他";
+}
+
+function limitTimeFromMinutes(minutes?: number) {
+  if (!minutes || !Number.isFinite(minutes)) return emptyRace.limitTime;
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:00`;
 }
 
 function paceFactor(type: Plan["paceType"], km: number, distance: number) {
@@ -675,6 +764,17 @@ export default function App() {
   const [pastForm, setPastForm] = useState<PastRace>(emptyPast);
   const [raceSearch, setRaceSearch] = useState("");
   const [activePicker, setActivePicker] = useState<string | null>(null);
+  const [raceDataOpen, setRaceDataOpen] = useState(false);
+  const [raceDataDetail, setRaceDataDetail] = useState<OfficialRaceData | null>(null);
+  const [raceDataQuery, setRaceDataQuery] = useState("");
+  const [raceDataPrefecture, setRaceDataPrefecture] = useState("");
+  const [raceDataMonth, setRaceDataMonth] = useState("");
+  const [raceDataAdvancedOpen, setRaceDataAdvancedOpen] = useState(false);
+  const [raceDataCategory, setRaceDataCategory] = useState("");
+  const [raceDataLimit, setRaceDataLimit] = useState("");
+  const [raceDataMcc, setRaceDataMcc] = useState("");
+  const [raceDataDifficulty, setRaceDataDifficulty] = useState("");
+  const [raceDataStatus, setRaceDataStatus] = useState("");
   const [planSavedMessage, setPlanSavedMessage] = useState("");
   const openingLogoX = useRef(new Animated.Value(-420)).current;
   const openingLogoOpacity = useRef(new Animated.Value(0)).current;
@@ -720,6 +820,34 @@ export default function App() {
   const openingBackgroundSource = store.settings.openingBackgroundUri ? { uri: store.settings.openingBackgroundUri } : OPENING_BACKGROUND;
   const homeHeroImageSource = store.settings.homeHeroImageUri ? { uri: store.settings.homeHeroImageUri } : HOME_HERO_BACKGROUND;
   const advancedFeaturesEnabled = Boolean(store.settings.advancedFeaturesEnabled);
+  const selectedRaceData = selectedRace?.raceDataId ? OFFICIAL_RACE_DATA.find((race) => race.id === selectedRace.raceDataId) : undefined;
+  const raceDataResults = useMemo(() => {
+    const query = raceDataQuery.trim().toLowerCase();
+    return OFFICIAL_RACE_DATA.filter((race) => {
+      const month = race.eventDate ? String(parseDateValue(race.eventDate).getMonth() + 1) : "";
+      const matchQuery = !query || `${race.name} ${race.prefecture} ${race.city ?? ""}`.toLowerCase().includes(query);
+      const matchPrefecture = !raceDataPrefecture || race.prefecture === raceDataPrefecture;
+      const matchMonth = !raceDataMonth || month === raceDataMonth;
+      const matchCategory = !raceDataCategory || race.category === raceDataCategory;
+      const matchLimit = !raceDataLimit || (race.timeLimitMinutes ?? 0) <= n(raceDataLimit) * 60;
+      const matchMcc = !raceDataMcc || (raceDataMcc === "yes" ? race.mccMember : !race.mccMember);
+      const matchDifficulty = !raceDataDifficulty || race.courseDifficulty === raceDataDifficulty;
+      const matchStatus = !raceDataStatus || race.verificationStatus === raceDataStatus;
+      return matchQuery && matchPrefecture && matchMonth && matchCategory && matchLimit && matchMcc && matchDifficulty && matchStatus;
+    });
+  }, [raceDataCategory, raceDataDifficulty, raceDataLimit, raceDataMcc, raceDataMonth, raceDataPrefecture, raceDataQuery, raceDataStatus]);
+  const coursePaceRows = useMemo(() => {
+    if (!selectedRace || !selectedPlan || !selectedTargetSec) return [];
+    return calculateFiveKmPacePlan({
+      distanceKm: n(selectedRace.distanceKm),
+      targetSeconds: Math.max(60, selectedTargetSec - totalStopSec),
+      sections: selectedRaceData?.sections,
+      strategy: selectedPlan.splitStrategy ?? defaultStrategyForPaceType(selectedPlan.paceType),
+      splitDifferenceMinutes: splitDiffMinutes(selectedPlan),
+      climbSecPerKm: n(store.settings.climbSec, 10),
+      descentSecPerKm: n(store.settings.descentSec, -5)
+    });
+  }, [selectedRace, selectedPlan, selectedTargetSec, selectedRaceData, totalStopSec, store.settings.climbSec, store.settings.descentSec]);
   const trainingSummary = useMemo(() => summarizeTraining(store.trainingActivities), [store.trainingActivities]);
   const trainingScore = useMemo(
     () =>
@@ -824,6 +952,90 @@ export default function App() {
       selectedRaceId: id
     });
     setRaceForm(emptyRace);
+  }
+
+  function registerRaceData(data: OfficialRaceData, mode: "add" | "update") {
+    const existing = store.races.find((race) => race.raceDataId === data.id);
+    const id = mode === "update" && existing ? existing.id : uid();
+    const source = data.sources[0];
+    const nextRace: Race = {
+      ...emptyRace,
+      id,
+      name: data.name,
+      prefecture: data.prefecture,
+      municipality: data.city ?? "",
+      location: combineLocation(data.prefecture, data.city),
+      date: data.eventDate ?? "",
+      category: raceCategoryFromData(data.category),
+      distanceKm: String(data.distanceKm),
+      startTime: data.startTime ?? emptyRace.startTime,
+      limitTime: limitTimeFromMinutes(data.timeLimitMinutes),
+      lostTimeMin: existing?.lostTimeMin ?? emptyRace.lostTimeMin,
+      officialUrl: source?.url ?? "",
+      memo: [
+        data.courseSummary,
+        ...(data.notes ?? []),
+        `データ状態: ${raceDataStatusLabel(data.verificationStatus)}`,
+        source ? `参照: ${source.title}（確認日 ${source.accessedAt}）` : ""
+      ].filter(Boolean).join("\n"),
+      raceDataId: data.id,
+      raceDataYear: String(data.year),
+      raceDataStatus: data.verificationStatus,
+      officialSourceTitle: source?.title ?? "",
+      officialAccessedAt: source?.accessedAt ?? "",
+      lastUsedAt: Date.now()
+    };
+    const nextGates = data.checkpoints
+      .filter((checkpoint) => checkpoint.closingTime)
+      .map((checkpoint) => ({
+        id: uid(),
+        raceId: id,
+        name: checkpoint.name,
+        distanceKm: String(checkpoint.distanceKm),
+        gateTime: checkpoint.closingTime ?? "",
+        memo: checkpoint.memo ?? ""
+      }));
+    const nextSegments = data.sections
+      .filter((section) => section.terrain === "uphill" || section.terrain === "downhill" || section.terrain === "flat")
+      .map((section) => {
+        const terrain: ElevationSegment["terrain"] = section.terrain === "uphill" ? "上り" : section.terrain === "downhill" ? "下り" : "平坦";
+        const adjustSecPerKm = terrain === "上り" ? store.settings.climbSec : terrain === "下り" ? store.settings.descentSec : store.settings.flatSec;
+        return { id: uid(), raceId: id, startKm: String(section.startKm), endKm: String(section.endKm), terrain, adjustSecPerKm };
+      });
+    const planExists = store.plans.some((plan) => plan.raceId === id);
+    const nextPlan: Plan = { ...emptyPlan, id: uid(), raceId: id, targetTime: limitTimeFromMinutes(data.timeLimitMinutes), splitStrategy: "even", splitDifferenceMin: "0" };
+    updateStore({
+      ...store,
+      races: mode === "update" && existing ? store.races.map((race) => (race.id === id ? nextRace : race)) : [nextRace, ...store.races],
+      gates: [...store.gates.filter((gate) => gate.raceId !== id), ...nextGates],
+      segments: [...store.segments.filter((segment) => segment.raceId !== id), ...nextSegments],
+      plans: planExists ? store.plans : [...store.plans, nextPlan],
+      selectedRaceId: id
+    });
+    setRaceForm(emptyRace);
+    setRaceDataDetail(null);
+    setRaceDataOpen(false);
+    setRaceSection("大会");
+    setTab("大会");
+  }
+
+  function confirmRegisterRaceData(data: OfficialRaceData) {
+    const existing = store.races.find((race) => race.raceDataId === data.id);
+    const warning = data.verificationStatus === "verified"
+      ? "公式情報として確認済みの範囲を大会登録へ反映します。"
+      : "未確認または一部確認済みの項目があります。登録後も公式サイトで必ず確認してください。";
+    if (existing) {
+      Alert.alert("登録済みの大会です", `${warning}\n\n既存の登録を更新するか、別の大会として追加できます。`, [
+        { text: "キャンセル", style: "cancel" },
+        { text: "別大会として追加", onPress: () => registerRaceData(data, "add") },
+        { text: "既存登録を更新", onPress: () => registerRaceData(data, "update") }
+      ]);
+      return;
+    }
+    Alert.alert("大会データを登録しますか？", warning, [
+      { text: "キャンセル", style: "cancel" },
+      { text: "登録する", onPress: () => registerRaceData(data, "add") }
+    ]);
   }
 
   function deleteRace(id: string) {
@@ -1225,6 +1437,7 @@ export default function App() {
             </Pressable>
           ))}
         </View>
+        {renderRaceDataSearchModal()}
         {showOpening && renderOpening()}
       </View>
     </SafeAreaView>
@@ -1637,6 +1850,166 @@ export default function App() {
     );
   }
 
+  function renderRaceDataSearchModal() {
+    const selectedDetail = raceDataDetail;
+    return (
+      <Modal visible={raceDataOpen} animationType="slide" onRequestClose={() => setRaceDataOpen(false)}>
+        <SafeAreaView style={styles.modalPage}>
+          <ScrollView style={styles.content} contentContainerStyle={styles.modalPageInner} keyboardShouldPersistTaps="handled">
+            <Card>
+              <View style={styles.paceHead}>
+                <View style={styles.listText}>
+                  <Text style={styles.sectionTitle}>大会データから選ぶ</Text>
+                  <Text style={styles.body}>公式サイトや公式PDFで確認できる範囲だけを、試験版データとして登録できます。</Text>
+                </View>
+                <SecondaryButton label="閉じる" onPress={() => {
+                  setRaceDataDetail(null);
+                  setRaceDataOpen(false);
+                }} />
+              </View>
+            </Card>
+            {selectedDetail ? (
+              <>
+                <Card>
+                  <Text style={styles.sectionTitle}>{selectedDetail.name}</Text>
+                  <Text style={styles.heroTitle}>{raceDataStatusLabel(selectedDetail.verificationStatus)}</Text>
+                  <Text style={styles.body}>{selectedDetail.prefecture} {selectedDetail.city ?? ""} / {selectedDetail.eventDate ?? "日付未設定"} / {raceDataCategoryLabel(selectedDetail.category)} {selectedDetail.distanceKm}km</Text>
+                  <Text style={styles.helpText}>スタート {selectedDetail.startTime ?? "-"} / 制限 {selectedDetail.timeLimitMinutes ? formatDurationJa(selectedDetail.timeLimitMinutes * 60) : "-"} / 難易度 {raceDataDifficultyLabel(selectedDetail.courseDifficulty)}</Text>
+                  {selectedDetail.verificationStatus !== "verified" && (
+                    <Text style={styles.noticeText}>注意: この大会データには一部確認中または試算の項目があります。登録後も必ず公式サイトで確認してください。</Text>
+                  )}
+                  <Text style={styles.body}>{selectedDetail.courseSummary}</Text>
+                </Card>
+                <Card>
+                  <Text style={styles.sectionTitle}>関門</Text>
+                  {selectedDetail.checkpoints.map((checkpoint) => (
+                    <View key={checkpoint.id} style={styles.courseMiniCard}>
+                      <Text style={styles.listTitle}>{checkpoint.name} / {checkpoint.distanceKm}km</Text>
+                      <Text style={styles.muted}>関門時刻 {checkpoint.closingTime ?? "-"} / {checkpoint.memo ?? "-"}</Text>
+                    </View>
+                  ))}
+                </Card>
+                <Card>
+                  <Text style={styles.sectionTitle}>5kmごとのコース特性</Text>
+                  <Text style={styles.helpText}>公式高低図などを元にした目安です。数値化済みの公式データではない場合があります。</Text>
+                  {selectedDetail.sections.map((section) => (
+                    <View key={`${section.startKm}-${section.endKm}`} style={styles.courseMiniCard}>
+                      <Text style={styles.listTitle}>{section.startKm} - {section.endKm}km / {terrainLabel(section.terrain)}</Text>
+                      <Text style={styles.muted}>{section.description ?? "-"} / 信頼度 {section.confidence ?? "low"}</Text>
+                    </View>
+                  ))}
+                </Card>
+                <Card>
+                  <Text style={styles.sectionTitle}>公式情報リンク</Text>
+                  {selectedDetail.sources.map((source) => (
+                    <View key={`${source.title}-${source.url}`} style={styles.courseMiniCard}>
+                      <Text style={styles.listTitle}>{source.title}</Text>
+                      <Text style={styles.muted}>{source.url}</Text>
+                      <Text style={styles.helpText}>確認日: {source.accessedAt}</Text>
+                    </View>
+                  ))}
+                  {!!selectedDetail.notes?.length && selectedDetail.notes.map((note) => <Text key={note} style={styles.helpText}>・{note}</Text>)}
+                </Card>
+                <View style={styles.buttonRow}>
+                  <SecondaryButton label="検索結果へ戻る" onPress={() => setRaceDataDetail(null)} />
+                  <PrimaryButton label="この大会を登録" onPress={() => confirmRegisterRaceData(selectedDetail)} />
+                </View>
+              </>
+            ) : (
+              <>
+                <Card>
+                  <Input label="大会名検索" value={raceDataQuery} onChangeText={setRaceDataQuery} placeholder="例: NAHA" />
+                  <SelectField
+                    label="都道府県"
+                    value={raceDataPrefecture || "すべて"}
+                    options={["すべて", ...PREFECTURES]}
+                    pickerId="race-data-prefecture"
+                    activePicker={activePicker}
+                    setActivePicker={setActivePicker}
+                    onSelect={(value) => setRaceDataPrefecture(value === "すべて" ? "" : value)}
+                  />
+                  <SelectField
+                    label="開催月"
+                    value={raceDataMonth || "すべて"}
+                    options={["すべて", ...RACE_DATA_MONTH_OPTIONS.filter(Boolean)]}
+                    displayValue={(value) => value === "すべて" ? value : `${value}月`}
+                    pickerId="race-data-month"
+                    activePicker={activePicker}
+                    setActivePicker={setActivePicker}
+                    onSelect={(value) => setRaceDataMonth(value === "すべて" ? "" : value)}
+                  />
+                  <SecondaryButton label={raceDataAdvancedOpen ? "詳細条件を閉じる" : "詳細条件を開く"} onPress={() => setRaceDataAdvancedOpen((current) => !current)} />
+                  {raceDataAdvancedOpen && (
+                    <View style={styles.advancedPanel}>
+                      <SelectField
+                        label="大会種別"
+                        value={raceDataCategory || "すべて"}
+                        options={RACE_DATA_CATEGORY_OPTIONS.map((value) => value || "すべて")}
+                        displayValue={raceDataCategoryLabel}
+                        pickerId="race-data-category"
+                        activePicker={activePicker}
+                        setActivePicker={setActivePicker}
+                        onSelect={(value) => setRaceDataCategory(value === "すべて" ? "" : value)}
+                      />
+                      <Input label="制限時間 以下（時間）" value={raceDataLimit} onChangeText={setRaceDataLimit} keyboardType="decimal-pad" placeholder="例: 7" />
+                      <SelectField
+                        label="MCC加盟"
+                        value={raceDataMcc === "yes" ? "加盟" : raceDataMcc === "no" ? "非加盟" : "すべて"}
+                        options={["すべて", "加盟", "非加盟"]}
+                        pickerId="race-data-mcc"
+                        activePicker={activePicker}
+                        setActivePicker={setActivePicker}
+                        onSelect={(value) => setRaceDataMcc(value === "加盟" ? "yes" : value === "非加盟" ? "no" : "")}
+                      />
+                      <SelectField
+                        label="コース難易度"
+                        value={raceDataDifficulty || "すべて"}
+                        options={RACE_DATA_DIFFICULTY_OPTIONS.map((value) => value || "すべて")}
+                        displayValue={raceDataDifficultyLabel}
+                        pickerId="race-data-difficulty"
+                        activePicker={activePicker}
+                        setActivePicker={setActivePicker}
+                        onSelect={(value) => setRaceDataDifficulty(value === "すべて" ? "" : value)}
+                      />
+                      <SelectField
+                        label="データ確認状態"
+                        value={raceDataStatus || "すべて"}
+                        options={RACE_DATA_STATUS_OPTIONS.map((value) => value || "すべて")}
+                        displayValue={raceDataStatusLabel}
+                        pickerId="race-data-status"
+                        activePicker={activePicker}
+                        setActivePicker={setActivePicker}
+                        onSelect={(value) => setRaceDataStatus(value === "すべて" ? "" : value)}
+                      />
+                    </View>
+                  )}
+                  <Text style={styles.helpText}>現在は少数の静的データで試験中です。MCC加盟大会すべての自動取得やスクレイピングは行いません。</Text>
+                </Card>
+                <Text style={styles.sectionCaption}>検索結果 {raceDataResults.length}件</Text>
+                {raceDataResults.map((race) => (
+                  <View key={race.id} style={styles.raceDataCard}>
+                    <View style={styles.raceCardHead}>
+                      <Text style={styles.listTitle}>{race.name}</Text>
+                      <Text style={[styles.usingBadge, race.verificationStatus !== "verified" && styles.warningBadge]}>{raceDataStatusLabel(race.verificationStatus)}</Text>
+                    </View>
+                    <Text style={styles.muted}>{race.prefecture} {race.city ?? ""} / {race.eventDate ?? "日付未設定"} / {raceDataCategoryLabel(race.category)} {race.distanceKm}km</Text>
+                    <Text style={styles.muted}>制限 {race.timeLimitMinutes ? formatDurationJa(race.timeLimitMinutes * 60) : "-"} / 関門 {race.checkpoints.length}か所 / コース {raceDataDifficultyLabel(race.courseDifficulty)}</Text>
+                    <Text style={styles.helpText}>確認日 {race.verifiedAt ?? "-"} / 公式情報リンクあり</Text>
+                    <View style={styles.buttonRow}>
+                      <SecondaryButton label="詳細を見る" onPress={() => setRaceDataDetail(race)} />
+                      <PrimaryButton label="この大会を登録" onPress={() => confirmRegisterRaceData(race)} />
+                    </View>
+                  </View>
+                ))}
+                {!raceDataResults.length && <Card><Text style={styles.body}>条件に合う大会データがありません。条件を減らすか、自分で入力してください。</Text></Card>}
+              </>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+    );
+  }
+
   function renderRaceTab() {
     const raceSections = advancedFeaturesEnabled ? ["大会", "関門", "給水P", "高低差"] : ["大会", "関門", "給水P"];
     const activeRaceSection = raceSections.includes(raceSection) ? raceSection : "大会";
@@ -1648,6 +2021,25 @@ export default function App() {
         }} />
         {activeRaceSection === "大会" && (
           <>
+            <Card>
+              <Text style={styles.sectionTitle}>大会登録方法</Text>
+              <Text style={styles.body}>公式情報を元にした試験版データから選ぶか、自分で大会情報を入力できます。未確認の項目は登録前に注意表示します。</Text>
+              <View style={styles.buttonRow}>
+                <PrimaryButton label="大会データから選ぶ" onPress={() => setRaceDataOpen(true)} />
+                <SecondaryButton label="自分で入力する" onPress={() => {
+                  setRaceForm(emptyRace);
+                  setActivePicker(null);
+                }} />
+              </View>
+            </Card>
+            {selectedRace?.raceDataId && (
+              <Card>
+                <Text style={styles.sectionTitle}>選択中の大会データ</Text>
+                <Text style={styles.body}>{selectedRace.name}</Text>
+                <Text style={styles.helpText}>状態: {raceDataStatusLabel(selectedRace.raceDataStatus ?? selectedRaceData?.verificationStatus ?? "")} / 参照: {selectedRace.officialSourceTitle || selectedRaceData?.sources[0]?.title || "-"} / 確認日: {selectedRace.officialAccessedAt || selectedRaceData?.sources[0]?.accessedAt || "-"}</Text>
+                <Text style={styles.noticeText}>大会データは登録時点の内容をコピー保存しています。最新情報は公式サイトで確認してください。</Text>
+              </Card>
+            )}
             <Card>
               <Text style={styles.sectionTitle}>{raceForm.id ? "大会を編集" : "大会登録"}</Text>
               <Input label="大会名" value={raceForm.name} onChangeText={(v) => setField(setRaceForm, "name", v)} />
@@ -1844,10 +2236,40 @@ export default function App() {
                   onChange={(value) => {
                     setPlanSavedMessage("");
                     const nextType = value === "前半ゆっくり後半アップ" ? "後半温存型" : value === "前半やや速め" ? "安全完走型" : "一定ペース型";
-                    setPlanForm((prev) => ({ ...prev, paceType: nextType as Plan["paceType"] }));
+                    setPlanForm((prev) => ({ ...prev, paceType: nextType as Plan["paceType"], splitStrategy: defaultStrategyForPaceType(nextType as Plan["paceType"]) }));
                   }}
                 />
-                <Text style={styles.helpText}>今は「前後半で何分差」までは固定入力せず、既存の3タイプで安全に反映します。将来、任意の前後半差を追加できます。</Text>
+                <Text style={styles.label}>前後半の配分</Text>
+                <Segment
+                  value={planForm.splitStrategy ?? defaultStrategyForPaceType(planForm.paceType)}
+                  values={["even", "negative", "positive"]}
+                  labelForValue={splitStrategyLabel}
+                  onChange={(value) => {
+                    setPlanSavedMessage("");
+                    setPlanForm((prev) => ({ ...prev, splitStrategy: value as CoursePaceStrategy }));
+                  }}
+                />
+                <Text style={styles.helpText}>{splitStrategyDescription(planForm.splitStrategy ?? defaultStrategyForPaceType(planForm.paceType))}</Text>
+                <SelectField
+                  label="前後半差"
+                  value={planForm.splitDifferenceMin ?? "0"}
+                  options={SPLIT_DIFF_OPTIONS}
+                  displayValue={(value) => value === "custom" ? "自分で入力" : `${value}分`}
+                  pickerId="plan-split-diff"
+                  activePicker={activePicker}
+                  setActivePicker={setActivePicker}
+                  onSelect={(value) => {
+                    setPlanSavedMessage("");
+                    setPlanForm((prev) => ({ ...prev, splitDifferenceMin: value }));
+                  }}
+                />
+                {planForm.splitDifferenceMin === "custom" && (
+                  <Input label="前後半差 分" value={planForm.customSplitDifferenceMin ?? ""} onChangeText={(value) => {
+                    setPlanSavedMessage("");
+                    setField(setPlanForm, "customSplitDifferenceMin", value);
+                  }} keyboardType="number-pad" />
+                )}
+                {splitDiffMinutes(planForm) >= 15 && <Text style={styles.noticeText}>前後半差が大きめです。関門時刻と後半の失速リスクを確認してください。</Text>}
               </View>
             )}
             <Input label="最低ほしい関門余裕（分）" value={planForm.gateBufferMin} onChangeText={(v) => {
@@ -1896,6 +2318,29 @@ export default function App() {
           <Text style={styles.sectionTitle}>ペース表</Text>
           <Text style={styles.body}>{selectedRace?.name ?? "大会未選択"} / 予測ゴール {formatDurationJa(predictedOfficialGoalSec)} / 平均 {formatPace(basePace)} / 関門余裕 最小{formatMinutesLabel(minMargin)}</Text>
           <Text style={styles.helpText}>基本は5kmごとの目安を確認します。1kmごとの詳細や手動調整は、設定で「詳細機能を表示」をオンにすると使えます。</Text>
+        </Card>
+        <Card>
+          <Text style={styles.sectionTitle}>5km区間ペース提案（試算）</Text>
+          <Text style={styles.body}>目標タイム、前後半の配分、登録済みコース特性から計算した参考ペースです。完走や記録を保証するものではありません。</Text>
+          <Text style={styles.helpText}>
+            {selectedRaceData
+              ? `参照データ: ${selectedRaceData.name} / ${raceDataStatusLabel(selectedRaceData.verificationStatus)}`
+              : "大会データ未選択のため、コース特性なしの平坦目安として表示します。"}
+          </Text>
+          {coursePaceRows.length ? coursePaceRows.map((row) => (
+            <View key={`course-${row.startKm}-${row.endKm}`} style={styles.coursePaceRow}>
+              <View style={styles.listText}>
+                <Text style={styles.listTitle}>{row.startKm.toFixed(row.startKm % 1 ? 1 : 0)} - {row.endKm.toFixed(row.endKm % 1 ? 1 : 0)}km / {terrainLabel(row.terrain)}</Text>
+                <Text style={styles.muted}>{row.description}</Text>
+                <Text style={styles.helpText}>補正 {row.adjustmentSecondsPerKm > 0 ? "+" : ""}{row.adjustmentSecondsPerKm}秒/km / 信頼度 {row.confidence}</Text>
+              </View>
+              <View style={styles.coursePaceValue}>
+                <Text style={styles.metricLabel}>目安</Text>
+                <Text style={styles.metricValue}>{formatPace(row.paceSecondsPerKm)}</Text>
+                <Text style={styles.muted}>{formatDuration(row.sectionSeconds)}</Text>
+              </View>
+            </View>
+          )) : <Text style={styles.muted}>プランを作成すると表示されます。</Text>}
         </Card>
         <Card>
           <Text style={styles.sectionTitle}>5kmごとの目安</Text>
@@ -2059,11 +2504,11 @@ export default function App() {
     );
   }
 
-  function renderSettings() {
+  function renderBasicSettings() {
     const adjustLabel = (value: string) => `${Number(value) > 0 ? "+" : ""}${value}秒/km`;
     return (
       <Card>
-        <Text style={styles.sectionTitle}>設定</Text>
+        <Text style={styles.sectionTitle}>基本設定</Text>
         <Text style={styles.body}>保存先: スマホ内保存。クラウド保存は準備中として設計のみ残しています。</Text>
         <View style={styles.settingToggleRow}>
           <View style={styles.settingToggleText}>
@@ -2076,38 +2521,6 @@ export default function App() {
             trackColor={{ false: "#d8d5ca", true: "#b8d9cb" }}
             thumbColor={advancedFeaturesEnabled ? "#176b51" : "#f7f5ee"}
           />
-        </View>
-        <View style={styles.settingBlock}>
-          <Text style={styles.sectionTitle}>オープニング背景画像</Text>
-          <Text style={styles.body}>現在: {store.settings.openingBackgroundUri ? "自分で選んだ画像" : "標準画像"}</Text>
-          <Text style={styles.helpText}>推奨: 縦長9:16、JPGまたはPNG、2MB前後まで。暗めの写真や余白のある写真だと、白いロゴと文字が読みやすくなります。選んだ画像はこの端末内だけに保存されます。</Text>
-          <View style={styles.openingPreview}>
-            <Image source={openingBackgroundSource} style={styles.openingPreviewImage} resizeMode="cover" />
-            <View style={styles.openingPreviewShade} />
-            <Image source={OPENING_LOGO} style={styles.openingPreviewLogo} resizeMode="contain" />
-          </View>
-          <View style={styles.buttonRow}>
-            <SecondaryButton label="画像を選択" onPress={pickOpeningBackground} />
-            <SecondaryButton label="標準画像に戻す" onPress={resetOpeningBackground} />
-          </View>
-        </View>
-        <View style={styles.settingBlock}>
-          <Text style={styles.sectionTitle}>ホームのヒーロー画像</Text>
-          <Text style={styles.body}>現在: {store.settings.homeHeroImageUri ? "自分で選んだ画像" : "標準画像"}</Text>
-          <Text style={styles.helpText}>ホーム画面の「対象大会」カードに使う画像です。オープニング背景画像とは別に保存されます。推奨: 縦長9:16または横長16:9、JPGまたはPNG、2MB前後まで。</Text>
-          <View style={styles.openingPreview}>
-            <Image source={homeHeroImageSource} style={styles.openingPreviewImage} resizeMode="cover" />
-            <View style={styles.openingPreviewShade} />
-            <View style={styles.heroPreviewTextBlock}>
-              <Text style={styles.darkLabel}>対象大会</Text>
-              <Text style={styles.darkRaceTitle}>{selectedRace?.name || "大会未登録"}</Text>
-              <Text style={styles.darkRaceMeta}>{selectedRace?.date || "2026-11-01"} / {selectedRace?.location || "開催地未登録"}</Text>
-            </View>
-          </View>
-          <View style={styles.buttonRow}>
-            <SecondaryButton label="画像を選択" onPress={pickHomeHeroImage} />
-            <SecondaryButton label="標準画像に戻す" onPress={resetHomeHeroImage} />
-          </View>
         </View>
         <Text style={styles.helpText}>高低差は「1kmあたり何秒増減するか」を選びます。迷ったら初期値のままで大丈夫です。</Text>
         <SelectField
@@ -2140,6 +2553,58 @@ export default function App() {
           setActivePicker={setActivePicker}
           onSelect={(value) => updateStore({ ...store, settings: { ...store.settings, flatSec: value } })}
         />
+      </Card>
+    );
+  }
+
+  function renderImageSettings() {
+    return (
+      <>
+        <Card>
+          <Text style={styles.sectionTitle}>画像設定</Text>
+          <Text style={styles.body}>オープニングとホームの画像は別々に保存されます。用途が違うので、それぞれに合う写真を選べます。</Text>
+        </Card>
+        <Card>
+          <Text style={styles.sectionTitle}>オープニング背景画像</Text>
+          <Text style={styles.body}>現在: {store.settings.openingBackgroundUri ? "自分で選んだ画像" : "標準画像"}</Text>
+          <Text style={styles.helpText}>アプリ起動時の短いアニメーションに使います。推奨: 縦長9:16、JPGまたはPNG、2MB前後まで。暗めの写真や余白のある写真だと、白いロゴと文字が読みやすくなります。</Text>
+          <View style={styles.openingPreview}>
+            <Image source={openingBackgroundSource} style={styles.openingPreviewImage} resizeMode="cover" />
+            <View style={styles.openingPreviewShade} />
+            <Image source={OPENING_LOGO} style={styles.openingPreviewLogo} resizeMode="contain" />
+          </View>
+          <View style={styles.buttonRow}>
+            <SecondaryButton label="画像を選択" onPress={pickOpeningBackground} />
+            <SecondaryButton label="標準画像に戻す" onPress={resetOpeningBackground} />
+          </View>
+        </Card>
+        <Card>
+          <Text style={styles.sectionTitle}>ホームのヒーロー画像</Text>
+          <Text style={styles.body}>現在: {store.settings.homeHeroImageUri ? "自分で選んだ画像" : "標準画像"}</Text>
+          <Text style={styles.helpText}>ホーム画面の「対象大会」カードに使います。オープニング背景画像とは別物です。推奨: 横長16:9、JPGまたはPNG、2MB前後まで。</Text>
+          <View style={styles.openingPreview}>
+            <Image source={homeHeroImageSource} style={styles.openingPreviewImage} resizeMode="cover" />
+            <View style={styles.openingPreviewShade} />
+            <View style={styles.heroPreviewTextBlock}>
+              <Text style={styles.darkLabel}>対象大会</Text>
+              <Text style={styles.darkRaceTitle}>{selectedRace?.name || "大会未登録"}</Text>
+              <Text style={styles.darkRaceMeta}>{selectedRace?.date || "2026-11-01"} / {selectedRace?.location || "開催地未登録"}</Text>
+            </View>
+          </View>
+          <View style={styles.buttonRow}>
+            <SecondaryButton label="画像を選択" onPress={pickHomeHeroImage} />
+            <SecondaryButton label="標準画像に戻す" onPress={resetHomeHeroImage} />
+          </View>
+        </Card>
+      </>
+    );
+  }
+
+  function renderDataSettings() {
+    return (
+      <Card>
+        <Text style={styles.sectionTitle}>データ管理</Text>
+        <Text style={styles.body}>大会、関門、プラン、練習分析、画像設定を含む保存データを管理します。</Text>
         <View style={styles.rowGap}>
           <PrimaryButton label="データバックアップ" onPress={backupData} />
           <SecondaryButton label="データ復元" onPress={restoreSample} />
@@ -2150,14 +2615,17 @@ export default function App() {
   }
 
   function renderSettingsTab() {
-    const settingsSections = ["設定", "PB", "過去比較"];
-    const activeSettingsSection = settingsSections.includes(settingsSection) ? settingsSection : "設定";
+    const settingsSections = ["基本", "画像", "データ", "PB", "過去"];
+    const normalizedSettingsSection = settingsSection === "設定" ? "基本" : settingsSection === "過去比較" ? "過去" : settingsSection;
+    const activeSettingsSection = settingsSections.includes(normalizedSettingsSection) ? normalizedSettingsSection : "基本";
     return (
       <>
         <Segment value={activeSettingsSection} values={settingsSections} onChange={setSettingsSection} />
-        {activeSettingsSection === "設定" && renderSettings()}
+        {activeSettingsSection === "基本" && renderBasicSettings()}
+        {activeSettingsSection === "画像" && renderImageSettings()}
+        {activeSettingsSection === "データ" && renderDataSettings()}
         {activeSettingsSection === "PB" && renderPbTab()}
-        {activeSettingsSection === "過去比較" && renderPastRace()}
+        {activeSettingsSection === "過去" && renderPastRace()}
       </>
     );
   }
@@ -2662,10 +3130,15 @@ const styles = StyleSheet.create({
   previewStatusWarn: { color: "#8a6200", backgroundColor: "#fff1c7" },
   previewStatusDanger: { color: "#b3261e", backgroundColor: "#ffd6d2" },
   raceCard: { backgroundColor: "#ffffff", borderWidth: 1, borderColor: "#e2ded2", borderRadius: 8, padding: 12, marginBottom: 10 },
+  raceDataCard: { backgroundColor: "#fffdf8", borderWidth: 1, borderColor: "#d8d7cd", borderRadius: 8, padding: 14, marginBottom: 10 },
   raceCardActive: { borderColor: "#176b51", backgroundColor: "#f2f8f3" },
   raceCardHead: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 4 },
   usingBadge: { backgroundColor: "#dcefe5", color: "#176b51", fontSize: 11, fontWeight: "900", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  warningBadge: { backgroundColor: "#fff1c7", color: "#8a6200" },
   editingBadge: { backgroundColor: "#fff1c7", color: "#8a6200", fontSize: 11, fontWeight: "900", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  courseMiniCard: { backgroundColor: "#ffffff", borderWidth: 1, borderColor: "#ebe7dc", borderRadius: 8, padding: 10, marginBottom: 8 },
+  coursePaceRow: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#fffdf8", borderWidth: 1, borderColor: "#ebe7dc", borderRadius: 8, padding: 12, marginTop: 8 },
+  coursePaceValue: { minWidth: 86, alignItems: "flex-end" },
   gateSummary: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: "#ebe7dc", paddingTop: 10, marginTop: 10 },
   gateSummaryText: { flex: 1 },
   gateSummaryBadge: { alignItems: "flex-end", gap: 5 },
