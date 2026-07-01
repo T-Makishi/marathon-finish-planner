@@ -21,6 +21,23 @@ import {
   View
 } from "react-native";
 import { JAPAN_MUNICIPALITIES } from "./data/japanMunicipalities";
+import { pickCsvFile } from "./src/services/filePickerService";
+import {
+  buildImportedActivities,
+  buildTrainingBatch,
+  calculateReadinessScore,
+  paceDifferenceLabel,
+  parseTrainingCsv,
+  summarizeTraining
+} from "./src/services/trainingCore";
+import {
+  ParsedTrainingPreviewRow,
+  TrainingColumnMapping,
+  TrainingImportBatch,
+  TrainingParseResult,
+  TrainingSourceApp,
+  TrainingActivity
+} from "./src/types/training";
 
 type Race = {
   id: string;
@@ -119,6 +136,8 @@ type Store = {
   plans: Plan[];
   pbs: PBRecord[];
   pastRaces: PastRace[];
+  trainingActivities: TrainingActivity[];
+  trainingImportBatches: TrainingImportBatch[];
   selectedRaceId?: string;
   settings: Settings;
 };
@@ -263,6 +282,41 @@ function formatDurationJa(sec: number | null | undefined): string {
 function formatMinutesLabel(sec: number | null | undefined): string {
   if (sec == null || !Number.isFinite(sec)) return "-";
   return `${Math.round(sec / 60)}分`;
+}
+
+function formatKm(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "-";
+  return value >= 100 ? value.toFixed(0) : value.toFixed(1);
+}
+
+function formatDateTime(value: string | undefined): string {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  return `${y}-${m}-${d} ${hh}:${mm}`;
+}
+
+function sourceAppLabel(value: string): string {
+  if (value === "garmin") return "Garmin";
+  if (value === "runkeeper") return "ASICS Runkeeper";
+  if (value === "strava") return "Strava";
+  return "その他";
+}
+
+function raceDaysLabel(dateText: string): string {
+  if (!dateText) return "大会日を登録すると残り日数を表示できます。";
+  const today = new Date();
+  const todayLocal = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const raceDate = parseDateValue(dateText).getTime();
+  const diff = Math.round((raceDate - todayLocal) / 86400000);
+  if (diff < 0) return "大会日は終了しています。";
+  if (diff === 0) return "大会当日です。";
+  return `大会まで残り${diff}日です。`;
 }
 
 function formatClockFromStart(startTime: string, cumulativeSec: number): string {
@@ -422,6 +476,8 @@ function sanitizeStore(raw: Partial<Store>): Store {
     plans,
     pbs: raw.pbs ?? [],
     pastRaces: raw.pastRaces ?? [],
+    trainingActivities: raw.trainingActivities ?? [],
+    trainingImportBatches: raw.trainingImportBatches ?? [],
     settings: sanitizeSettings(raw.settings ?? defaultSettings)
   };
 }
@@ -556,6 +612,8 @@ function createInitialStore(): Store {
     plans: [{ ...emptyPlan, id: uid(), raceId: sampleRaceId }],
     pbs: [],
     pastRaces: [],
+    trainingActivities: [],
+    trainingImportBatches: [],
     selectedRaceId: sampleRaceId,
     settings: defaultSettings
   };
@@ -569,6 +627,17 @@ export default function App() {
   const [raceSection, setRaceSection] = useState("大会");
   const [planSection, setPlanSection] = useState("作成");
   const [pbSection, setPbSection] = useState("PB");
+  const [settingsSection, setSettingsSection] = useState("設定");
+  const [trainingSection, setTrainingSection] = useState("概要");
+  const [trainingImportOpen, setTrainingImportOpen] = useState(false);
+  const [trainingGuideOpen, setTrainingGuideOpen] = useState(false);
+  const [trainingSourceApp, setTrainingSourceApp] = useState<TrainingSourceApp>("garmin");
+  const [trainingFileName, setTrainingFileName] = useState("");
+  const [trainingCsvText, setTrainingCsvText] = useState("");
+  const [trainingMapping, setTrainingMapping] = useState<TrainingColumnMapping>({});
+  const [trainingParseResult, setTrainingParseResult] = useState<TrainingParseResult | null>(null);
+  const [trainingDuplicateMode, setTrainingDuplicateMode] = useState<"exclude" | "all">("exclude");
+  const [trainingImportMessage, setTrainingImportMessage] = useState("");
   const [raceForm, setRaceForm] = useState<Race>(emptyRace);
   const [gateForm, setGateForm] = useState<Gate>(emptyGate);
   const [segmentForm, setSegmentForm] = useState<ElevationSegment>(emptySegment);
@@ -623,6 +692,23 @@ export default function App() {
     .sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0));
   const openingBackgroundSource = store.settings.openingBackgroundUri ? { uri: store.settings.openingBackgroundUri } : OPENING_BACKGROUND;
   const homeHeroImageSource = store.settings.homeHeroImageUri ? { uri: store.settings.homeHeroImageUri } : HOME_HERO_BACKGROUND;
+  const trainingSummary = useMemo(() => summarizeTraining(store.trainingActivities), [store.trainingActivities]);
+  const trainingScore = useMemo(
+    () =>
+      calculateReadinessScore({
+        raceDistanceKm: selectedRace ? n(selectedRace.distanceKm) : undefined,
+        summary: trainingSummary,
+        targetPaceSec: basePace,
+        minGateMarginSec: minMargin
+      }),
+    [trainingSummary, selectedRace?.distanceKm, basePace, minMargin]
+  );
+  const trainingPaceDiff = basePace && trainingSummary.last30AveragePaceSec ? trainingSummary.last30AveragePaceSec - basePace : null;
+  const latestTrainingImport = [...store.trainingImportBatches].sort((a, b) => b.importedAt.localeCompare(a.importedAt))[0];
+  const recentTrainingActivities = useMemo(
+    () => [...store.trainingActivities].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 50),
+    [store.trainingActivities]
+  );
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
@@ -793,6 +879,101 @@ export default function App() {
     setPastForm(emptyPast);
   }
 
+  function openTrainingImport() {
+    setTrainingImportOpen(true);
+    setTrainingImportMessage("");
+    setTrainingFileName("");
+    setTrainingCsvText("");
+    setTrainingMapping({});
+    setTrainingParseResult(null);
+    setTrainingDuplicateMode("exclude");
+  }
+
+  async function chooseTrainingCsvFile() {
+    try {
+      const file = await pickCsvFile();
+      if (!file) {
+        Alert.alert("CSVファイルが選択されていません", "CSVを選択するとプレビューへ進めます。");
+        return;
+      }
+      const result = parseTrainingCsv(file.text, trainingSourceApp, store.trainingActivities);
+      setTrainingFileName(file.name ?? "training.csv");
+      setTrainingCsvText(file.text);
+      setTrainingMapping(result.mapping);
+      setTrainingParseResult(result);
+      setTrainingImportMessage(result.errors.length ? result.errors[0] : "CSVを読み込みました。列とプレビューを確認してください。");
+    } catch {
+      Alert.alert("ファイルを開けませんでした", "UTF-8のCSVファイルを選び直してください。");
+    }
+  }
+
+  function updateTrainingMapping(field: keyof TrainingColumnMapping, column: string) {
+    const nextMapping = { ...trainingMapping, [field]: column === "なし" ? undefined : column };
+    setTrainingMapping(nextMapping);
+    if (trainingCsvText) {
+      const result = parseTrainingCsv(trainingCsvText, trainingSourceApp, store.trainingActivities, nextMapping);
+      setTrainingParseResult(result);
+    }
+  }
+
+  function confirmTrainingImport() {
+    if (!trainingParseResult) {
+      Alert.alert("CSVファイルが選択されていません", "先にCSVファイルを選択してください。");
+      return;
+    }
+    if (trainingParseResult.limitExceededRows > 0) {
+      Alert.alert("最大1,000件を超えています", "CSVを1,000件以下に分割してから取り込んでください。");
+      return;
+    }
+    const importable = trainingParseResult.rows.filter((row) => row.activity && (row.status === "取込予定" || row.status === "主要集計対象外" || (trainingDuplicateMode === "all" && row.status === "重複候補")));
+    if (!importable.length) {
+      Alert.alert("取込対象データがありません", "列の割当てやCSVの内容を確認してください。");
+      return;
+    }
+    const importedAt = new Date().toISOString();
+    const batchId = uid();
+    const activities = buildImportedActivities(trainingParseResult.rows, trainingSourceApp, importedAt, batchId, trainingDuplicateMode === "all");
+    const batch = buildTrainingBatch(batchId, importedAt, trainingSourceApp, trainingFileName, trainingParseResult, activities.length);
+    updateStore({
+      ...store,
+      trainingActivities: [...activities, ...store.trainingActivities],
+      trainingImportBatches: [batch, ...store.trainingImportBatches]
+    });
+    setTrainingImportMessage(`${activities.length}件を取り込みました。`);
+    setTrainingImportOpen(false);
+    setTrainingSection("概要");
+  }
+
+  function deleteTrainingActivity(id: string) {
+    Alert.alert("練習データ削除", "この練習データを削除しますか？", [
+      { text: "キャンセル", style: "cancel" },
+      { text: "削除", style: "destructive", onPress: () => updateStore({ ...store, trainingActivities: store.trainingActivities.filter((activity) => activity.id !== id) }) }
+    ]);
+  }
+
+  function deleteTrainingBatch(batchId: string) {
+    Alert.alert("取込履歴ごと削除", "この取込で追加された練習データをまとめて削除しますか？", [
+      { text: "キャンセル", style: "cancel" },
+      {
+        text: "削除",
+        style: "destructive",
+        onPress: () =>
+          updateStore({
+            ...store,
+            trainingActivities: store.trainingActivities.filter((activity) => activity.importBatchId !== batchId),
+            trainingImportBatches: store.trainingImportBatches.filter((batch) => batch.id !== batchId)
+          })
+      }
+    ]);
+  }
+
+  function clearTrainingData() {
+    Alert.alert("練習データ削除", "取込済みの練習データと取込履歴をすべて削除しますか？大会データは残ります。", [
+      { text: "キャンセル", style: "cancel" },
+      { text: "削除", style: "destructive", onPress: () => updateStore({ ...store, trainingActivities: [], trainingImportBatches: [] }) }
+    ]);
+  }
+
   async function shareFile(uri: string) {
     if (Platform.OS === "web") {
       Alert.alert("出力完了", uri);
@@ -922,7 +1103,7 @@ export default function App() {
   function clearAll() {
     Alert.alert("全データ削除", "スマホ内保存データを削除します。", [
       { text: "キャンセル", style: "cancel" },
-      { text: "削除", style: "destructive", onPress: () => updateStore({ ...createInitialStore(), races: [], gates: [], segments: [], stops: [], manualLaps: [], plans: [], pbs: [], pastRaces: [], selectedRaceId: undefined }) }
+      { text: "削除", style: "destructive", onPress: () => updateStore({ ...createInitialStore(), races: [], gates: [], segments: [], stops: [], manualLaps: [], plans: [], pbs: [], pastRaces: [], trainingActivities: [], trainingImportBatches: [], selectedRaceId: undefined }) }
     ]);
   }
 
@@ -947,13 +1128,13 @@ export default function App() {
         </View>
         <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
           {tab === "ホーム" && renderHome()}
-          {tab === "大会登録" && renderRaceTab()}
+          {tab === "大会" && renderRaceTab()}
           {tab === "プラン" && renderPlanTab()}
-          {tab === "ペース表" && renderPaceTable()}
-          {tab === "PB" && renderPbTab()}
+          {tab === "練習分析" && renderTrainingAnalysis()}
+          {tab === "設定" && renderSettingsTab()}
         </ScrollView>
         <View style={styles.tabbar}>
-          {["ホーム", "大会登録", "プラン", "ペース表", "PB"].map((item) => (
+          {["ホーム", "大会", "プラン", "練習分析", "設定"].map((item) => (
             <Pressable key={item} onPress={() => setTab(item)} style={[styles.tabButton, tab === item && styles.tabButtonActive]}>
               <Text style={[styles.tabText, tab === item && styles.tabTextActive]}>{item}</Text>
             </Pressable>
@@ -1104,6 +1285,227 @@ export default function App() {
           <Text style={styles.body}>GPS計測や外部アプリ連携ではなく、大会前に関門アウトを避けるペース配分を作るためのアプリです。大会情報と関門は手入力で保存します。</Text>
         </Card>
       </>
+    );
+  }
+
+  function renderTrainingAnalysis() {
+    const scoreDetailsOpen = trainingSection === "スコア";
+    return (
+      <>
+        <Card>
+          <Text style={styles.sectionTitle}>練習分析</Text>
+          <Text style={styles.body}>取込済みデータ {store.trainingActivities.length}件 / 最終取込 {latestTrainingImport ? formatDateTime(latestTrainingImport.importedAt) : "未取込"}</Text>
+          <Text style={styles.helpText}>練習データはこの端末内に保存され、CSVデータを外部サーバーへ送信しません。元CSVファイル全体は保存しません。</Text>
+          <View style={styles.rowGap}>
+            <PrimaryButton label="CSVを取り込む" onPress={openTrainingImport} />
+            <SecondaryButton label="取込方法を見る" onPress={() => setTrainingGuideOpen(true)} />
+          </View>
+          {!!trainingImportMessage && <Text style={styles.savedText}>{trainingImportMessage}</Text>}
+        </Card>
+        <Segment value={trainingSection} values={["概要", "履歴", "管理", "スコア"]} onChange={setTrainingSection} />
+        {trainingSection === "概要" && (
+          <>
+            {renderTrainingComparisonCard()}
+            <View style={styles.grid2}>
+              <Metric label="今週の走行距離" value={`${formatKm(trainingSummary.weekDistanceKm)}km`} />
+              <Metric label="今月の走行距離" value={`${formatKm(trainingSummary.monthDistanceKm)}km`} />
+              <Metric label="直近30日" value={`${formatKm(trainingSummary.last30DistanceKm)}km`} />
+              <Metric label="直近90日" value={`${formatKm(trainingSummary.last90DistanceKm)}km`} />
+              <Metric label="練習回数（30日）" value={`${trainingSummary.last30Count}回`} />
+              <Metric label="平均ペース（30日）" value={formatPace(trainingSummary.last30AveragePaceSec)} />
+              <Metric label="最長走行距離" value={`${formatKm(trainingSummary.allLongestDistanceKm)}km`} />
+              <Metric label="完走準備度" value={`${trainingScore.total}点 ${trainingScore.label}`} />
+            </View>
+            <Card>
+              <Text style={styles.sectionTitle}>直近練習データ</Text>
+              <Text style={styles.helpText}>直近50件まで表示します。ランニング以外のデータは主要集計に含まれません。</Text>
+              {recentTrainingActivities.length ? recentTrainingActivities.map((activity) => (
+                <View key={activity.id} style={styles.trainingActivityCard}>
+                  <View style={styles.listText}>
+                    <Text style={styles.listTitle}>{activity.date} / {activity.activityType}</Text>
+                    <Text style={styles.muted}>{formatKm(activity.distanceKm)}km / {formatDuration(activity.durationSeconds)} / {formatPace(activity.averagePaceSecondsPerKm)} / 心拍 {activity.averageHeartRate ?? "-"} / {sourceAppLabel(activity.sourceApp)}</Text>
+                  </View>
+                  <DangerButton label="削除" onPress={() => deleteTrainingActivity(activity.id)} />
+                </View>
+              )) : <Text style={styles.muted}>まだ練習データがありません。</Text>}
+            </Card>
+          </>
+        )}
+        {trainingSection === "履歴" && (
+          <Card>
+            <Text style={styles.sectionTitle}>CSV取込履歴</Text>
+            {store.trainingImportBatches.length ? store.trainingImportBatches.map((batch) => (
+              <View key={batch.id} style={styles.trainingActivityCard}>
+                <View style={styles.listText}>
+                  <Text style={styles.listTitle}>{formatDateTime(batch.importedAt)} / {sourceAppLabel(batch.sourceApp)}</Text>
+                  <Text style={styles.muted}>{batch.fileName ?? "-"} / 取込 {batch.importedRows}件 / 除外 {batch.excludedRows}件 / 重複 {batch.duplicateRows}件</Text>
+                </View>
+                <DangerButton label="履歴ごと削除" onPress={() => deleteTrainingBatch(batch.id)} />
+              </View>
+            )) : <Text style={styles.muted}>取込履歴はありません。</Text>}
+          </Card>
+        )}
+        {trainingSection === "管理" && (
+          <Card>
+            <Text style={styles.sectionTitle}>練習データ管理</Text>
+            <Text style={styles.body}>練習データは端末内に保存されます。ブラウザデータ削除や端末変更により失われる場合があります。バックアップ機能を使うと練習データも含めて保存できます。</Text>
+            <Text style={styles.noticeText}>本アプリはGarmin、Strava、ASICS Runkeeperおよび各大会主催者の公式アプリではなく、各社との提携・承認を示すものではありません。</Text>
+            <DangerButton label="練習データをすべて削除" onPress={clearTrainingData} />
+          </Card>
+        )}
+        {scoreDetailsOpen && (
+          <Card>
+            <Text style={styles.sectionTitle}>完走準備度スコア内訳</Text>
+            <Text style={styles.body}>練習量と登録済み大会プランを比較した参考値です。完走や健康状態を保証するものではありません。</Text>
+            <View style={styles.grid2}>
+              <Metric label="直近30日走行距離" value={`${trainingScore.details.last30Distance}点`} />
+              <Metric label="直近90日走行距離" value={`${trainingScore.details.last90Distance}点`} />
+              <Metric label="最長走行距離" value={`${trainingScore.details.longestDistance}点`} />
+              <Metric label="練習回数" value={`${trainingScore.details.trainingCount}点`} />
+              <Metric label="目標ペースとの差" value={`${trainingScore.details.paceDiff}点`} />
+              <Metric label="関門余裕" value={`${trainingScore.details.gateMargin}点`} />
+            </View>
+            <Text style={styles.sectionTitle}>改善ヒント</Text>
+            {trainingScore.suggestions.length ? trainingScore.suggestions.map((suggestion) => <Text key={suggestion} style={styles.body}>・{suggestion}</Text>) : <Text style={styles.muted}>現在のデータでは大きな注意点はありません。</Text>}
+          </Card>
+        )}
+        {renderTrainingImportModal()}
+        {renderTrainingGuideModal()}
+      </>
+    );
+  }
+
+  function renderTrainingComparisonCard() {
+    if (!selectedRace) {
+      return (
+        <Card>
+          <Text style={styles.sectionTitle}>大会プランとの比較</Text>
+          <Text style={styles.body}>大会を登録すると、練習実績と目標ペースを比較できます。</Text>
+        </Card>
+      );
+    }
+    const daysLabel = raceDaysLabel(selectedRace.date);
+    return (
+      <Card>
+        <Text style={styles.sectionTitle}>大会プランとの比較</Text>
+        <Text style={styles.heroTitle}>{selectedRace.name}</Text>
+        <Text style={styles.body}>{selectedRace.date || "日付未設定"} / {daysLabel}</Text>
+        <View style={styles.grid2}>
+          <Metric label="目標ゴールタイム" value={goalTimeLabel} />
+          <Metric label="目標平均ペース" value={formatPace(basePace)} />
+          <Metric label="30日平均ペース" value={formatPace(trainingSummary.last30AveragePaceSec)} />
+          <Metric label="ペース差" value={paceDifferenceLabel(trainingPaceDiff)} />
+          <Metric label="30日走行距離" value={`${formatKm(trainingSummary.last30DistanceKm)}km`} />
+          <Metric label="90日走行距離" value={`${formatKm(trainingSummary.last90DistanceKm)}km`} />
+          <Metric label="最長走行距離" value={`${formatKm(trainingSummary.allLongestDistanceKm)}km`} />
+          <Metric label="最小関門余裕" value={formatMinutesLabel(minMargin)} />
+        </View>
+        <View style={styles.judgementBox}>
+          <Text style={styles.homeMetricLabel}>完走準備度スコア</Text>
+          <Text style={styles.judgementText}>{trainingScore.total}点 / {trainingScore.label}</Text>
+          <Text style={styles.helpText}>練習全体の平均ペースと大会ペースを比較した参考値です。ゆっくり走る練習も含まれます。</Text>
+        </View>
+      </Card>
+    );
+  }
+
+  function renderTrainingImportModal() {
+    const result = trainingParseResult;
+    const planned = result?.rows.filter((row) => row.status === "取込予定" || row.status === "主要集計対象外").length ?? 0;
+    const duplicates = result?.rows.filter((row) => row.status === "重複候補").length ?? 0;
+    const excluded = result ? result.rows.filter((row) => row.status === "除外" || row.status === "要確認").length + result.limitExceededRows : 0;
+    const previewRows = result?.rows.slice(0, 50) ?? [];
+    const headerOptions = ["なし", ...(result?.headers ?? [])];
+    return (
+      <Modal visible={trainingImportOpen} animationType="slide" onRequestClose={() => setTrainingImportOpen(false)}>
+        <SafeAreaView style={styles.safe}>
+          <View style={styles.modalPage}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>CSV取込み</Text>
+              <Pressable onPress={() => setTrainingImportOpen(false)} style={styles.modalCloseButton}>
+                <Text style={styles.modalCloseText}>閉じる</Text>
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={styles.modalPageInner} keyboardShouldPersistTaps="handled">
+              <Text style={styles.helpText}>1 取込元選択 → 2 ファイル選択 → 3 列確認 → 4 プレビュー → 5 取込結果</Text>
+              <Card>
+                <Text style={styles.sectionTitle}>1. 取込元</Text>
+                <Segment value={trainingSourceApp} values={["garmin", "runkeeper", "strava", "other"]} labelForValue={sourceAppLabel} onChange={(value) => {
+                  const source = value as TrainingSourceApp;
+                  setTrainingSourceApp(source);
+                  if (trainingCsvText) {
+                    const parsed = parseTrainingCsv(trainingCsvText, source, store.trainingActivities, trainingMapping);
+                    setTrainingParseResult(parsed);
+                  }
+                }} />
+                <Text style={styles.helpText}>サービス名はCSV取込元の識別目的だけで使用します。</Text>
+                <PrimaryButton label="CSVファイルを選択" onPress={chooseTrainingCsvFile} />
+                <Text style={styles.body}>選択中: {trainingFileName || "未選択"}</Text>
+              </Card>
+              {result && (
+                <>
+                  <Card>
+                    <Text style={styles.sectionTitle}>2. 列確認</Text>
+                    <Text style={styles.body}>認識した列: {result.recognizedColumns.join(" / ") || "なし"}</Text>
+                    <SelectField label="日付" value={trainingMapping.date ?? ""} options={headerOptions} onSelect={(v) => updateTrainingMapping("date", v)} />
+                    <SelectField label="距離" value={trainingMapping.distance ?? ""} options={headerOptions} onSelect={(v) => updateTrainingMapping("distance", v)} />
+                    <SelectField label="時間" value={trainingMapping.duration ?? ""} options={headerOptions} onSelect={(v) => updateTrainingMapping("duration", v)} />
+                    <SelectField label="種目" value={trainingMapping.activityType ?? ""} options={headerOptions} onSelect={(v) => updateTrainingMapping("activityType", v)} />
+                    <SelectField label="平均心拍（任意）" value={trainingMapping.heartRate ?? "なし"} options={headerOptions} onSelect={(v) => updateTrainingMapping("heartRate", v)} />
+                    <SelectField label="メモ（任意）" value={trainingMapping.memo ?? "なし"} options={headerOptions} onSelect={(v) => updateTrainingMapping("memo", v)} />
+                  </Card>
+                  <Card>
+                    <Text style={styles.sectionTitle}>3. プレビュー</Text>
+                    <View style={styles.grid2}>
+                      <Metric label="CSV総行数" value={`${result.totalRows}件`} />
+                      <Metric label="取込予定" value={`${planned}件`} />
+                      <Metric label="除外" value={`${excluded}件`} />
+                      <Metric label="重複候補" value={`${duplicates}件`} />
+                      <Metric label="上限超過" value={`${result.limitExceededRows}件`} />
+                    </View>
+                    {result.limitExceededRows > 0 && <Text style={styles.noticeText}>1,000件制限により {result.limitExceededRows}件が対象外です。CSVを分割してください。</Text>}
+                    {result.errors.map((error) => <Text key={error} style={styles.noticeText}>{error}</Text>)}
+                    {previewRows.map((row) => <TrainingPreviewCard key={row.index} row={row} source={trainingSourceApp} />)}
+                  </Card>
+                  <Card>
+                    <Text style={styles.sectionTitle}>4. 重複時の処理</Text>
+                    <Segment value={trainingDuplicateMode} values={["exclude", "all"]} labelForValue={(value) => value === "exclude" ? "重複を除外" : "すべて取込"} onChange={(value) => setTrainingDuplicateMode(value as "exclude" | "all")} />
+                    <View style={styles.buttonRow}>
+                      <PrimaryButton label="取込みを確定" onPress={confirmTrainingImport} />
+                      <SecondaryButton label="キャンセル" onPress={() => setTrainingImportOpen(false)} />
+                    </View>
+                  </Card>
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </SafeAreaView>
+      </Modal>
+    );
+  }
+
+  function renderTrainingGuideModal() {
+    return (
+      <Modal visible={trainingGuideOpen} animationType="slide" onRequestClose={() => setTrainingGuideOpen(false)}>
+        <SafeAreaView style={styles.safe}>
+          <View style={styles.modalPage}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>取込方法ガイド</Text>
+              <Pressable onPress={() => setTrainingGuideOpen(false)} style={styles.modalCloseButton}>
+                <Text style={styles.modalCloseText}>閉じる</Text>
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={styles.modalPageInner}>
+              <Card><Text style={styles.sectionTitle}>Garmin</Text><Text style={styles.body}>Garmin ConnectのWeb版からアクティビティデータを書き出し、保存したCSVをこのアプリから選択します。</Text></Card>
+              <Card><Text style={styles.sectionTitle}>ASICS Runkeeper</Text><Text style={styles.body}>RunkeeperのWeb版でデータ書き出しを行い、書き出したCSVを端末へ保存して選択します。</Text></Card>
+              <Card><Text style={styles.sectionTitle}>Strava</Text><Text style={styles.body}>StravaのWeb版でデータエクスポートを行い、エクスポートデータ内のCSVを端末へ保存して選択します。</Text></Card>
+              <Card><Text style={styles.sectionTitle}>その他</Text><Text style={styles.body}>日付、距離、時間、種目を含むCSVを用意してください。列名が異なる場合は取込画面で割り当てできます。平均ペースはアプリ内で自動計算します。</Text></Card>
+              <Text style={styles.noticeText}>各サービスの画面や書き出し方法は変更される場合があります。最新の方法は各サービスの公式ヘルプをご確認ください。</Text>
+              <Text style={styles.noticeText}>本アプリはGarmin、Strava、ASICS Runkeeperおよび各大会主催者の公式アプリではなく、各社との提携・承認を示すものではありません。</Text>
+            </ScrollView>
+          </View>
+        </SafeAreaView>
+      </Modal>
     );
   }
 
@@ -1259,7 +1661,7 @@ export default function App() {
   function renderPlanTab() {
     return (
       <>
-        <Segment value={planSection} values={["作成", "出力", "過去比較"]} onChange={setPlanSection} />
+        <Segment value={planSection} values={["作成", "ペース表", "出力", "過去比較"]} onChange={setPlanSection} />
         {planSection === "作成" && (
           <Card>
             <Text style={styles.sectionTitle}>関門・ゴール逆算プラン</Text>
@@ -1315,6 +1717,7 @@ export default function App() {
             {!!planSavedMessage && <Text style={styles.savedText}>{planSavedMessage}</Text>}
           </Card>
         )}
+        {planSection === "ペース表" && renderPaceTable()}
         {planSection === "出力" && (
           <Card>
             <Text style={styles.sectionTitle}>出力</Text>
@@ -1531,6 +1934,27 @@ export default function App() {
           <DangerButton label="全データ削除" onPress={clearAll} />
         </View>
       </Card>
+    );
+  }
+
+  function renderSettingsTab() {
+    return (
+      <>
+        <Segment value={settingsSection} values={["設定", "PB", "過去比較", "出力"]} onChange={setSettingsSection} />
+        {settingsSection === "設定" && renderSettings()}
+        {settingsSection === "PB" && renderPbTab()}
+        {settingsSection === "過去比較" && renderPastRace()}
+        {settingsSection === "出力" && (
+          <Card>
+            <Text style={styles.sectionTitle}>ペース表の出力</Text>
+            <Text style={styles.body}>現在のペース表をCSVまたはA4縦PDFで出力します。練習データのバックアップは設定の「データバックアップ」に含まれます。</Text>
+            <View style={styles.rowGap}>
+              <PrimaryButton label="CSV出力" onPress={exportCsv} />
+              <SecondaryButton label="PDF出力" onPress={exportPdf} />
+            </View>
+          </Card>
+        )}
+      </>
     );
   }
 }
@@ -1849,6 +2273,24 @@ function ListCard({ title, subtitle, onEdit, onDelete }: { title: string; subtit
   );
 }
 
+function TrainingPreviewCard({ row, source }: { row: ParsedTrainingPreviewRow; source: TrainingSourceApp }) {
+  const activity = row.activity;
+  const danger = row.status === "除外" || row.status === "要確認";
+  const warn = row.status === "重複候補";
+  return (
+    <View style={styles.trainingPreviewCard}>
+      <View style={styles.paceHead}>
+        <Text style={styles.listTitle}>{activity?.date ?? `行 ${row.index}`}</Text>
+        <Text style={[styles.previewStatus, danger ? styles.previewStatusDanger : warn ? styles.previewStatusWarn : styles.previewStatusOk]}>{row.status}</Text>
+      </View>
+      <Text style={styles.muted}>
+        {activity?.activityType ?? "-"} / {activity ? `${formatKm(activity.distanceKm)}km` : "-"} / {activity ? formatDuration(activity.durationSeconds) : "-"} / {activity ? formatPace(activity.averagePaceSecondsPerKm) : "-"} / 心拍 {activity?.averageHeartRate ?? "-"} / {sourceAppLabel(source)}
+      </Text>
+      {!!row.reason && <Text style={styles.helpText}>理由: {row.reason}</Text>}
+    </View>
+  );
+}
+
 function Badge({ label }: { label: StatusLabel }) {
   return (
     <View style={[styles.badge, badgeStyle(label)]}>
@@ -1893,6 +2335,8 @@ const styles = StyleSheet.create({
   appSub: { marginTop: 3, color: "#1f2926", fontSize: 13, fontWeight: "800" },
   content: { flex: 1 },
   contentInner: { padding: 14, paddingBottom: 150 },
+  modalPage: { flex: 1, backgroundColor: "#f3f1ec" },
+  modalPageInner: { padding: 14, paddingBottom: 34 },
   card: { backgroundColor: "rgba(255,255,255,0.88)", borderWidth: 1, borderColor: "rgba(30,34,32,0.12)", borderRadius: 8, padding: 16, marginBottom: 12, shadowColor: "#000", shadowOpacity: 0.08, shadowOffset: { width: 0, height: 2 }, shadowRadius: 8, elevation: 1 },
   sectionTitle: { fontSize: 15, fontWeight: "800", color: "#31423b", marginBottom: 8 },
   heroTitle: { fontSize: 24, fontWeight: "900", color: "#263238", marginBottom: 5 },
@@ -2003,6 +2447,12 @@ const styles = StyleSheet.create({
   listText: { flex: 1 },
   listTitle: { color: "#263238", fontSize: 15, fontWeight: "800", marginBottom: 3 },
   listActions: { gap: 6 },
+  trainingActivityCard: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#fffdf8", borderWidth: 1, borderColor: "#e2ded2", borderRadius: 8, padding: 12, marginBottom: 10 },
+  trainingPreviewCard: { backgroundColor: "#fffdf8", borderWidth: 1, borderColor: "#e2ded2", borderRadius: 8, padding: 12, marginTop: 10 },
+  previewStatus: { minWidth: 78, textAlign: "center", borderRadius: 8, overflow: "hidden", paddingHorizontal: 8, paddingVertical: 5, fontSize: 11, fontWeight: "900" },
+  previewStatusOk: { color: "#176b51", backgroundColor: "#dcefe5" },
+  previewStatusWarn: { color: "#8a6200", backgroundColor: "#fff1c7" },
+  previewStatusDanger: { color: "#b3261e", backgroundColor: "#ffd6d2" },
   raceCard: { backgroundColor: "#ffffff", borderWidth: 1, borderColor: "#e2ded2", borderRadius: 8, padding: 12, marginBottom: 10 },
   raceCardActive: { borderColor: "#176b51", backgroundColor: "#f2f8f3" },
   raceCardHead: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 4 },
