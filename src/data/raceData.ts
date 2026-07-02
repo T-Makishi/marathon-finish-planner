@@ -40,6 +40,13 @@ export type RaceDataWaterStation = {
   confidence?: DataConfidence;
 };
 
+export type RaceDataSupportPoint = {
+  distanceKm: number;
+  name: string;
+  type: "retire-bus" | "medical" | "other";
+  confidence?: DataConfidence;
+};
+
 export type OfficialRaceData = {
   id: string;
   slug: string;
@@ -61,6 +68,7 @@ export type OfficialRaceData = {
   checkpoints: RaceDataCheckpoint[];
   sections: RaceDataSection[];
   waterStations?: RaceDataWaterStation[];
+  supportPoints?: RaceDataSupportPoint[];
   sources: RaceDataSource[];
   verificationStatus: RaceDataStatus;
   verifiedAt?: string | null;

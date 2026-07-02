@@ -10,31 +10,42 @@ export const nahaMarathon: OfficialRaceData = {
   eventDate: "2026-12-06",
   category: "full",
   distanceKm: 42.195,
-  startLocation: "奥武山陸上競技場付近",
+  startLocation: "奥武山公園",
   finishLocation: "奥武山陸上競技場",
   startTime: "09:00",
   timeLimitMinutes: 375,
   mccMember: false,
   startType: "single",
   courseDifficulty: "hard",
-  courseSummary: "沖縄本島南部を走るフルマラソン。公式サイトの公開情報を基に、確認済みの関門時刻と試験版の5km区間目安を保持しています。",
+  courseSummary: "那覇市から南部5市町を通り、平和祈念公園を経由して奥武山陸上競技場へ戻るフルマラソン。公式サイトで確認できる大会概要、関門規制、競技中止勧告地点、リタイアバス地点を反映しています。",
   checkpoints: [
+    { id: "naha-2026-stop-advisory-1", name: "競技中止勧告 1", distanceKm: 7.2, closingTime: "10:25", memo: "仲井真交差点。関門ではなく、交通規制解除に伴う安全確認地点として登録。" },
+    { id: "naha-2026-stop-advisory-2", name: "競技中止勧告 2", distanceKm: 13.3, closingTime: "11:20", memo: "東風平中学校前。関門ではなく、交通規制解除に伴う安全確認地点として登録。" },
+    { id: "naha-2026-stop-advisory-3", name: "競技中止勧告 3", distanceKm: 17.1, closingTime: "11:50", memo: "具志頭交差点。関門ではなく、交通規制解除に伴う安全確認地点として登録。" },
     { id: "naha-2026-gate-1", name: "第1制限地点", distanceKm: 21.3, closingTime: "12:15", memo: "平和祈念公園内" },
+    { id: "naha-2026-stop-advisory-4", name: "競技中止勧告 4", distanceKm: 28.3, closingTime: "13:20", memo: "南部病院跡地前。関門ではなく、交通規制解除に伴う安全確認地点として登録。" },
     { id: "naha-2026-gate-2", name: "第2制限地点", distanceKm: 34.3, closingTime: "14:10", memo: "那覇看護専門学校" },
+    { id: "naha-2026-stop-advisory-5", name: "競技中止勧告 5", distanceKm: 39.3, closingTime: "14:55", memo: "赤嶺交差点。関門ではなく、交通規制解除に伴う安全確認地点として登録。" },
     { id: "naha-2026-finish", name: "FINISH", distanceKm: 42.195, closingTime: "15:15", memo: "奥武山陸上競技場" }
   ],
   sections: [
-    { startKm: 0, endKm: 5, terrain: "flat", description: "序盤の混雑を考慮する区間。", confidence: "medium" },
-    { startKm: 5, endKm: 10, terrain: "uphill", description: "上り基調として試算。", confidence: "low" },
-    { startKm: 10, endKm: 15, terrain: "rolling", description: "起伏が続く区間として試算。", confidence: "low" },
-    { startKm: 15, endKm: 20, terrain: "uphill", description: "中間点手前まで余裕を残したい区間。", confidence: "low" },
-    { startKm: 20, endKm: 25, terrain: "downhill", description: "第1制限地点後の下り基調として試算。", confidence: "low" },
-    { startKm: 25, endKm: 30, terrain: "mixed", description: "後半に入る前の切り替え区間。", confidence: "low" },
-    { startKm: 30, endKm: 35, terrain: "rolling", description: "第2制限地点に向けて余裕確認が必要な区間。", confidence: "low" },
-    { startKm: 35, endKm: 40, terrain: "flat", description: "終盤の粘り区間。", confidence: "medium" },
-    { startKm: 40, endKm: 42.195, terrain: "flat", description: "ゴールまでの最終区間。", confidence: "medium" }
+    { startKm: 0, endKm: 7.2, terrain: "mixed", description: "奥武山公園から久茂地、国際通り方面を経て仲井真交差点へ向かう序盤。混雑とロスタイムを見込む区間。", confidence: "low" },
+    { startKm: 7.2, endKm: 13.3, terrain: "uphill", description: "仲井真交差点から東風平中学校前方面。前半の余裕を削りやすい上り基調の参考区間。", confidence: "low" },
+    { startKm: 13.3, endKm: 17.1, terrain: "rolling", description: "東風平中学校前から具志頭交差点方面。起伏を見込んで無理に上げない区間。", confidence: "low" },
+    { startKm: 17.1, endKm: 21.3, terrain: "rolling", description: "具志頭交差点から平和祈念公園内の第1制限地点へ向かう区間。第1制限地点の余裕を優先。", confidence: "low" },
+    { startKm: 21.3, endKm: 28.3, terrain: "downhill", description: "平和祈念公園からひめゆりの塔、琉球ガラス村方面を経て南部病院跡地前へ向かう後半入りの区間。", confidence: "low" },
+    { startKm: 28.3, endKm: 34.3, terrain: "mixed", description: "南部病院跡地前から糸満ロータリー方面を経て第2制限地点へ向かう区間。給水・補給の停止を含めて余裕確認。", confidence: "low" },
+    { startKm: 34.3, endKm: 39.3, terrain: "flat", description: "那覇看護専門学校から小禄バイパス、赤嶺交差点方面。終盤の失速を抑える区間。", confidence: "low" },
+    { startKm: 39.3, endKm: 42.195, terrain: "flat", description: "赤嶺交差点から奥武山運動公園へ戻る最終区間。ゴール制限時刻までの残り余裕を確認。", confidence: "medium" }
   ],
   waterStations: [],
+  supportPoints: [
+    { distanceKm: 13.3, name: "東風平中学校前", type: "retire-bus", confidence: "high" },
+    { distanceKm: 17.5, name: "ローソン八重瀬 玻名城店", type: "retire-bus", confidence: "high" },
+    { distanceKm: 21.3, name: "第1制限地点", type: "retire-bus", confidence: "high" },
+    { distanceKm: 26.2, name: "琉球ガラス村", type: "retire-bus", confidence: "high" },
+    { distanceKm: 34.3, name: "第2制限地点", type: "retire-bus", confidence: "high" }
+  ],
   sources: [
     { title: "NAHAマラソン公式サイト 大会概要", url: "https://naha-marathon.jp/info/", type: "official-web", accessedAt: "2026-07-02" },
     { title: "NAHAマラソン公式サイト コース・関門規制", url: "https://naha-marathon.jp/course/", type: "official-web", accessedAt: "2026-07-02" }
@@ -42,8 +53,9 @@ export const nahaMarathon: OfficialRaceData = {
   verificationStatus: "partially-verified",
   verifiedAt: "2026-07-02",
   notes: [
-    "大会基本情報と関門時刻は公式サイトの公開情報を参照しています。",
-    "5km区間の地形分類は試験版の目安です。公式高低図の数値転載ではありません。",
+    "大会基本情報、関門時刻、競技中止勧告地点、リタイアバス待機所は公式サイトの公開情報を参照しています。",
+    "競技中止勧告地点は正式な関門とは異なりますが、完走計画上の安全確認地点として登録しています。",
+    "区間の地形分類は公式高低図の画像や数値を転載せず、低信頼度の参考目安として設定しています。",
     "公式画像、ロゴ、コース図は保存・転載していません。"
   ]
 };

@@ -1921,13 +1921,20 @@ export default function App() {
                   ))}
                 </Card>
                 <Card>
-                  <Text style={styles.sectionTitle}>給水所</Text>
+                  <Text style={styles.sectionTitle}>給水・サポート地点</Text>
                   {selectedDetail.waterStations?.length ? selectedDetail.waterStations.map((station) => (
                     <View key={`${station.distanceKm}-${station.name ?? "water"}`} style={styles.courseMiniCard}>
-                      <Text style={styles.listTitle}>{station.distanceKm}km</Text>
+                      <Text style={styles.listTitle}>{station.distanceKm}km / 給水</Text>
                       <Text style={styles.muted}>{station.name ?? "地点名未登録"} / 信頼度 {station.confidence ?? "unknown"}</Text>
                     </View>
-                  )) : <Text style={styles.muted}>データなし</Text>}
+                  )) : null}
+                  {selectedDetail.supportPoints?.length ? selectedDetail.supportPoints.map((point) => (
+                    <View key={`${point.type}-${point.distanceKm}-${point.name}`} style={styles.courseMiniCard}>
+                      <Text style={styles.listTitle}>{point.distanceKm}km / {point.type === "retire-bus" ? "リタイアバス" : point.type === "medical" ? "救護" : "サポート"}</Text>
+                      <Text style={styles.muted}>{point.name} / 信頼度 {point.confidence ?? "unknown"}</Text>
+                    </View>
+                  )) : null}
+                  {!selectedDetail.waterStations?.length && !selectedDetail.supportPoints?.length && <Text style={styles.muted}>データなし</Text>}
                 </Card>
                 <Card>
                   <Text style={styles.sectionTitle}>公式情報リンク</Text>
