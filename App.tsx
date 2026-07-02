@@ -103,6 +103,8 @@ type Plan = {
   gateBufferMin: string;
 };
 
+type PaceExportMode = "5km目安" | "全距離";
+
 type StopPoint = {
   id: string;
   raceId: string;
@@ -743,6 +745,7 @@ export default function App() {
   const [tab, setTab] = useState("ホーム");
   const [raceSection, setRaceSection] = useState("大会");
   const [planSection, setPlanSection] = useState("作成");
+  const [paceExportMode, setPaceExportMode] = useState<PaceExportMode>("5km目安");
   const [pbSection, setPbSection] = useState("PB");
   const [settingsSection, setSettingsSection] = useState("設定");
   const [trainingSection, setTrainingSection] = useState("概要");
@@ -1289,6 +1292,21 @@ export default function App() {
     ]);
   }
 
+  function getCompactPaceRows() {
+    const distance = n(selectedRace?.distanceKm ?? "0");
+    const fiveKmRows = Array.from({ length: Math.floor(distance / 5) }, (_, index) => (index + 1) * 5)
+      .map((km) => paceRows.find((row) => Math.abs(row.km - km) < 0.01))
+      .filter(Boolean) as PaceRow[];
+    const importantRows = paceRows.filter((row) => row.gate || row.stopSec > 0 || Math.abs(row.km - distance) < 0.01);
+    return [...fiveKmRows, ...importantRows]
+      .filter((row, index, rows) => rows.findIndex((item) => Math.abs(item.km - row.km) < 0.01 && item.gate?.id === row.gate?.id) === index)
+      .sort((a, b) => a.km - b.km);
+  }
+
+  function getExportPaceRows() {
+    return paceExportMode === "全距離" ? paceRows : getCompactPaceRows();
+  }
+
   async function shareFile(uri: string) {
     if (Platform.OS === "web") {
       Alert.alert("出力完了", uri);
@@ -1301,7 +1319,8 @@ export default function App() {
 
   async function exportCsv() {
     const header = ["大会名", "スタート時刻", "ロスタイム", "実走開始時刻", "目標ゴールタイム", "距離", "予定ラップ", "通過予定", "関門時刻", "関門余裕", "給水/停止", "メモ"];
-    const lines = paceRows.map((row) => [
+    const exportRows = getExportPaceRows();
+    const lines = exportRows.map((row) => [
       selectedRace?.name ?? "",
       selectedRace?.startTime ?? "",
       `${selectedRace?.lostTimeMin ?? "0"}分`,
@@ -1334,13 +1353,14 @@ export default function App() {
   }
 
   async function exportPdf() {
-    const rows = paceRows
+    const exportRows = getExportPaceRows();
+    const rows = exportRows
       .map(
         (row) =>
           `<tr><td>${row.gate?.distanceKm ?? row.km}</td><td>${formatDuration(row.adjustedLapSec)}</td><td>${row.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes)}</td><td>${row.gate?.gateTime ?? ""}</td><td>${formatMinutesLabel(row.gateMarginSec)}</td><td>${row.stopSec ? `+${row.stopSec}秒` : ""}</td><td>${[row.gate?.name, row.gate?.memo, row.stopMemo, row.manual ? "手動調整" : ""].filter(Boolean).join("<br>")}</td></tr>`
       )
       .join("");
-    const html = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 portrait;margin:12mm}body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#263238}h1{font-size:18px;margin:0 0 8px}.summary{margin:8px 0 12px;padding:8px;background:#f6f3ee;font-size:11px}table{width:100%;border-collapse:collapse;font-size:9px}th,td{border:1px solid #ccd6d0;padding:4px;text-align:left;vertical-align:top}th{background:#e9f1eb}@media print{body{margin:0}.summary{break-inside:avoid}tr{break-inside:avoid}}</style></head><body><h1>RUN Finish Planner</h1><div class="summary"><b>${selectedRace?.name ?? ""}</b><br>スタート ${selectedRace?.startTime ?? "-"} / ロスタイム ${selectedRace?.lostTimeMin ?? "0"}分 / 実走開始 ${getRealStartTime(selectedRace)} / 目標 ${goalTimeLabel} / 予測ゴール ${formatDurationJa(predictedOfficialGoalSec)} / 関門余裕 最小${formatMinutesLabel(minMargin)}</div><table><thead><tr><th>距離</th><th>予定ラップ</th><th>通過予定</th><th>関門時刻</th><th>関門余裕</th><th>給水/停止</th><th>メモ</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 portrait;margin:12mm}body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#263238}h1{font-size:18px;margin:0 0 8px}.summary{margin:8px 0 12px;padding:8px;background:#f6f3ee;font-size:11px}table{width:100%;border-collapse:collapse;font-size:9px}th,td{border:1px solid #ccd6d0;padding:4px;text-align:left;vertical-align:top}th{background:#e9f1eb}@media print{body{margin:0}.summary{break-inside:avoid}tr{break-inside:avoid}}</style></head><body><h1>RUN Finish Planner</h1><div class="summary"><b>${selectedRace?.name ?? ""}</b><br>出力範囲 ${paceExportMode} / スタート ${selectedRace?.startTime ?? "-"} / ロスタイム ${selectedRace?.lostTimeMin ?? "0"}分 / 実走開始 ${getRealStartTime(selectedRace)} / 目標 ${goalTimeLabel} / 予測ゴール ${formatDurationJa(predictedOfficialGoalSec)} / 関門余裕 最小${formatMinutesLabel(minMargin)}</div><table><thead><tr><th>距離</th><th>予定ラップ</th><th>通過予定</th><th>関門時刻</th><th>関門余裕</th><th>給水/停止</th><th>メモ</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
     if (Platform.OS === "web") {
       const web = globalThis as any;
       const win = web.open("", "_blank");
@@ -2103,6 +2123,25 @@ export default function App() {
     );
   }
 
+  function renderSelectedRaceContext(label: string) {
+    if (!selectedRace) {
+      return (
+        <Card>
+          <Text style={styles.sectionTitle}>{label}</Text>
+          <Text style={styles.body}>大会が未選択です。ホームまたは大会一覧から対象大会を選んでください。</Text>
+        </Card>
+      );
+    }
+    return (
+      <View style={styles.contextCard}>
+        <Text style={styles.contextLabel}>{label}</Text>
+        <Text style={styles.contextTitle}>{selectedRace.name}</Text>
+        <Text style={styles.contextMeta}>{selectedRace.date || "日付未設定"} / {combineLocation(selectedRace.prefecture, selectedRace.municipality, selectedRace.location) || "開催地未設定"} / {selectedRace.distanceKm || "-"}km</Text>
+        <Text style={styles.contextMeta}>開始 {selectedRace.startTime || "-"} / ロスタイム {selectedRace.lostTimeMin ?? "0"}分 / 制限ゴール {getLimitGoalTime(selectedRace)}</Text>
+      </View>
+    );
+  }
+
   function renderRaceTab() {
     const raceSections = advancedFeaturesEnabled ? ["大会", "関門", "給水P", "高低差"] : ["大会", "関門", "給水P"];
     const activeRaceSection = raceSections.includes(raceSection) ? raceSection : "大会";
@@ -2112,6 +2151,7 @@ export default function App() {
           setActivePicker(null);
           setRaceSection(value);
         }} />
+        {renderSelectedRaceContext("選択中の大会")}
         {activeRaceSection === "大会" && (
           <>
             <Card>
@@ -2279,6 +2319,7 @@ export default function App() {
     return (
       <>
         <Segment value={planSection} values={["作成", "ペース表", "出力", "過去比較"]} onChange={setPlanSection} />
+        {renderSelectedRaceContext(planSection === "作成" ? "プラン対象大会" : `${planSection}の対象大会`)}
         {planSection === "作成" && (
           <Card>
             <Text style={styles.sectionTitle}>関門・ゴール逆算プラン</Text>
@@ -2384,14 +2425,25 @@ export default function App() {
         {planSection === "出力" && (
           <Card>
             <Text style={styles.sectionTitle}>出力</Text>
-            <Text style={styles.body}>現在のペース表をCSVまたはA4縦PDFで出力し、スマホ共有を開きます。CSVはUTF-8 BOM付きです。</Text>
+            <Text style={styles.body}>現在のペース表をCSVまたはA4縦PDFで出力します。CSVはUTF-8 BOM付きです。</Text>
+            <Text style={styles.label}>出力する範囲</Text>
+            <Segment value={paceExportMode} values={["5km目安", "全距離"]} onChange={(value) => setPaceExportMode(value as PaceExportMode)} />
+            <Text style={styles.helpText}>{paceExportMode === "5km目安" ? "大会当日に見やすいよう、5km地点、関門、給水/停止、ゴールだけを出力します。" : "確認用として1kmごとの全行を出力します。印刷枚数は多くなります。"}</Text>
             <View style={styles.rowGap}>
               <PrimaryButton label="CSV出力" onPress={exportCsv} />
               <SecondaryButton label="PDF出力" onPress={exportPdf} />
             </View>
           </Card>
         )}
-        {planSection === "過去比較" && renderPastRace()}
+        {planSection === "過去比較" && (
+          <>
+            <Card>
+              <Text style={styles.sectionTitle}>過去比較の役割</Text>
+              <Text style={styles.body}>過去比較は完走計画そのものではなく、前回大会や自己ベストとの差を確認する補助機能です。不要なら入力しなくてもペース表作成には影響しません。</Text>
+            </Card>
+            {renderPastRace()}
+          </>
+        )}
       </>
     );
   }
@@ -3103,6 +3155,10 @@ const styles = StyleSheet.create({
   modalPage: { flex: 1, backgroundColor: "#f3f1ec" },
   modalPageInner: { padding: 14, paddingBottom: 34 },
   card: { backgroundColor: "rgba(255,255,255,0.88)", borderWidth: 1, borderColor: "rgba(30,34,32,0.12)", borderRadius: 8, padding: 16, marginBottom: 12, shadowColor: "#000", shadowOpacity: 0.08, shadowOffset: { width: 0, height: 2 }, shadowRadius: 8, elevation: 1 },
+  contextCard: { backgroundColor: "#111817", borderRadius: 8, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.14)" },
+  contextLabel: { color: "rgba(255,255,255,0.72)", fontSize: 12, lineHeight: 17, fontWeight: "900", marginBottom: 4 },
+  contextTitle: { color: "#ffffff", fontSize: 18, lineHeight: 24, fontWeight: "900", marginBottom: 5 },
+  contextMeta: { color: "rgba(255,255,255,0.84)", fontSize: 12, lineHeight: 18, fontWeight: "700" },
   sectionTitle: { fontSize: 15, fontWeight: "800", color: "#31423b", marginBottom: 8 },
   heroTitle: { fontSize: 24, fontWeight: "900", color: "#263238", marginBottom: 5 },
   muted: { color: "#6d766f", fontSize: 13, lineHeight: 19 },
