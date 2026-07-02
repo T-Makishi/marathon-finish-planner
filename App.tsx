@@ -63,6 +63,9 @@ type Race = {
   raceDataId?: string;
   raceDataYear?: string;
   raceDataStatus?: string;
+  sourceRaceId?: string;
+  sourceRaceYear?: string;
+  raceDataSnapshot?: OfficialRaceData;
   officialSourceTitle?: string;
   officialAccessedAt?: string;
   officialUrl: string;
@@ -773,6 +776,7 @@ export default function App() {
   const [raceDataCategory, setRaceDataCategory] = useState("");
   const [raceDataLimit, setRaceDataLimit] = useState("");
   const [raceDataMcc, setRaceDataMcc] = useState("");
+  const [raceDataElevation, setRaceDataElevation] = useState("");
   const [raceDataDifficulty, setRaceDataDifficulty] = useState("");
   const [raceDataStatus, setRaceDataStatus] = useState("");
   const [planSavedMessage, setPlanSavedMessage] = useState("");
@@ -831,11 +835,13 @@ export default function App() {
       const matchCategory = !raceDataCategory || race.category === raceDataCategory;
       const matchLimit = !raceDataLimit || (race.timeLimitMinutes ?? 0) <= n(raceDataLimit) * 60;
       const matchMcc = !raceDataMcc || (raceDataMcc === "yes" ? race.mccMember : !race.mccMember);
+      const hasElevation = race.sections.some((section) => section.terrain !== "unknown" || section.elevationGainM != null || section.elevationLossM != null);
+      const matchElevation = !raceDataElevation || (raceDataElevation === "yes" ? hasElevation : !hasElevation);
       const matchDifficulty = !raceDataDifficulty || race.courseDifficulty === raceDataDifficulty;
       const matchStatus = !raceDataStatus || race.verificationStatus === raceDataStatus;
-      return matchQuery && matchPrefecture && matchMonth && matchCategory && matchLimit && matchMcc && matchDifficulty && matchStatus;
+      return matchQuery && matchPrefecture && matchMonth && matchCategory && matchLimit && matchMcc && matchElevation && matchDifficulty && matchStatus;
     });
-  }, [raceDataCategory, raceDataDifficulty, raceDataLimit, raceDataMcc, raceDataMonth, raceDataPrefecture, raceDataQuery, raceDataStatus]);
+  }, [raceDataCategory, raceDataDifficulty, raceDataElevation, raceDataLimit, raceDataMcc, raceDataMonth, raceDataPrefecture, raceDataQuery, raceDataStatus]);
   const coursePaceRows = useMemo(() => {
     if (!selectedRace || !selectedPlan || !selectedTargetSec) return [];
     return calculateFiveKmPacePlan({
@@ -955,7 +961,8 @@ export default function App() {
   }
 
   function registerRaceData(data: OfficialRaceData, mode: "add" | "update") {
-    const existing = store.races.find((race) => race.raceDataId === data.id);
+    const dataYear = data.year == null ? "" : String(data.year);
+    const existing = store.races.find((race) => (race.raceDataId === data.id || race.sourceRaceId === data.id) && (!dataYear || race.raceDataYear === dataYear || race.sourceRaceYear === dataYear));
     const id = mode === "update" && existing ? existing.id : uid();
     const source = data.sources[0];
     const nextRace: Race = {
@@ -968,19 +975,24 @@ export default function App() {
       date: data.eventDate ?? "",
       category: raceCategoryFromData(data.category),
       distanceKm: String(data.distanceKm),
-      startTime: data.startTime ?? emptyRace.startTime,
-      limitTime: limitTimeFromMinutes(data.timeLimitMinutes),
+      startTime: data.startTime ?? "",
+      limitTime: data.timeLimitMinutes ? limitTimeFromMinutes(data.timeLimitMinutes) : "",
       lostTimeMin: existing?.lostTimeMin ?? emptyRace.lostTimeMin,
       officialUrl: source?.url ?? "",
       memo: [
         data.courseSummary,
+        data.startLocation ? `スタート地点: ${data.startLocation}` : "",
+        data.finishLocation ? `ゴール地点: ${data.finishLocation}` : "",
         ...(data.notes ?? []),
         `データ状態: ${raceDataStatusLabel(data.verificationStatus)}`,
         source ? `参照: ${source.title}（確認日 ${source.accessedAt}）` : ""
       ].filter(Boolean).join("\n"),
       raceDataId: data.id,
-      raceDataYear: String(data.year),
+      raceDataYear: dataYear,
       raceDataStatus: data.verificationStatus,
+      sourceRaceId: data.id,
+      sourceRaceYear: dataYear,
+      raceDataSnapshot: data,
       officialSourceTitle: source?.title ?? "",
       officialAccessedAt: source?.accessedAt ?? "",
       lastUsedAt: Date.now()
@@ -1003,13 +1015,13 @@ export default function App() {
         return { id: uid(), raceId: id, startKm: String(section.startKm), endKm: String(section.endKm), terrain, adjustSecPerKm };
       });
     const planExists = store.plans.some((plan) => plan.raceId === id);
-    const nextPlan: Plan = { ...emptyPlan, id: uid(), raceId: id, targetTime: limitTimeFromMinutes(data.timeLimitMinutes), splitStrategy: "even", splitDifferenceMin: "0" };
+    const nextPlan: Plan | null = data.timeLimitMinutes ? { ...emptyPlan, id: uid(), raceId: id, targetTime: limitTimeFromMinutes(data.timeLimitMinutes), splitStrategy: "even", splitDifferenceMin: "0" } : null;
     updateStore({
       ...store,
       races: mode === "update" && existing ? store.races.map((race) => (race.id === id ? nextRace : race)) : [nextRace, ...store.races],
       gates: [...store.gates.filter((gate) => gate.raceId !== id), ...nextGates],
       segments: [...store.segments.filter((segment) => segment.raceId !== id), ...nextSegments],
-      plans: planExists ? store.plans : [...store.plans, nextPlan],
+      plans: planExists || !nextPlan ? store.plans : [...store.plans, nextPlan],
       selectedRaceId: id
     });
     setRaceForm(emptyRace);
@@ -1020,21 +1032,30 @@ export default function App() {
   }
 
   function confirmRegisterRaceData(data: OfficialRaceData) {
-    const existing = store.races.find((race) => race.raceDataId === data.id);
+    const dataYear = data.year == null ? "" : String(data.year);
+    const existing = store.races.find((race) => (race.raceDataId === data.id || race.sourceRaceId === data.id) && (!dataYear || race.raceDataYear === dataYear || race.sourceRaceYear === dataYear));
+    const missingItems = [
+      data.eventDate ? "" : "開催日",
+      data.startTime ? "" : "スタート時刻",
+      data.timeLimitMinutes ? "" : "制限時間",
+      data.checkpoints.length ? "" : "関門",
+      data.sections.some((section) => section.terrain !== "unknown") ? "" : "高低差"
+    ].filter(Boolean).join("、") || "なし";
     const warning = data.verificationStatus === "verified"
       ? "公式情報として確認済みの範囲を大会登録へ反映します。"
       : "未確認または一部確認済みの項目があります。登録後も公式サイトで必ず確認してください。";
+    const summary = `${data.name}\n年度: ${data.year ?? "未登録"}\n開催日: ${data.eventDate ?? "未登録"}\n制限時間: ${data.timeLimitMinutes ? formatDurationJa(data.timeLimitMinutes * 60) : "未登録"}\n関門: ${data.checkpoints.length}件\n高低差: ${data.sections.some((section) => section.terrain !== "unknown") ? "あり" : "データなし"}\n未確認項目: ${missingItems}`;
     if (existing) {
-      Alert.alert("登録済みの大会です", `${warning}\n\n既存の登録を更新するか、別の大会として追加できます。`, [
+      Alert.alert("登録済みの大会です", `${summary}\n\n${warning}\n\n既存の登録を更新するか、別の大会として追加できます。`, [
         { text: "キャンセル", style: "cancel" },
         { text: "別大会として追加", onPress: () => registerRaceData(data, "add") },
         { text: "既存登録を更新", onPress: () => registerRaceData(data, "update") }
       ]);
       return;
     }
-    Alert.alert("大会データを登録しますか？", warning, [
+    Alert.alert("登録内容を確認", `${summary}\n\n${warning}`, [
       { text: "キャンセル", style: "cancel" },
-      { text: "登録する", onPress: () => registerRaceData(data, "add") }
+      { text: "この内容で登録する", onPress: () => registerRaceData(data, "add") }
     ]);
   }
 
@@ -1873,12 +1894,14 @@ export default function App() {
                 <Card>
                   <Text style={styles.sectionTitle}>{selectedDetail.name}</Text>
                   <Text style={styles.heroTitle}>{raceDataStatusLabel(selectedDetail.verificationStatus)}</Text>
-                  <Text style={styles.body}>{selectedDetail.prefecture} {selectedDetail.city ?? ""} / {selectedDetail.eventDate ?? "日付未設定"} / {raceDataCategoryLabel(selectedDetail.category)} {selectedDetail.distanceKm}km</Text>
-                  <Text style={styles.helpText}>スタート {selectedDetail.startTime ?? "-"} / 制限 {selectedDetail.timeLimitMinutes ? formatDurationJa(selectedDetail.timeLimitMinutes * 60) : "-"} / 難易度 {raceDataDifficultyLabel(selectedDetail.courseDifficulty)}</Text>
+                  <Text style={styles.body}>{selectedDetail.prefecture} {selectedDetail.city ?? ""} / 年度 {selectedDetail.year ?? "未登録"} / {selectedDetail.eventDate ?? "開催日未登録"} / {raceDataCategoryLabel(selectedDetail.category)} {selectedDetail.distanceKm}km</Text>
+                  <Text style={styles.helpText}>スタート時刻 {selectedDetail.startTime ?? "未登録"} / 制限 {selectedDetail.timeLimitMinutes ? formatDurationJa(selectedDetail.timeLimitMinutes * 60) : "未登録"} / スタート方式 {selectedDetail.startType === "wave" ? "ウェーブ" : selectedDetail.startType === "single" ? "一斉" : "不明"}</Text>
+                  <Text style={styles.helpText}>スタート地点 {selectedDetail.startLocation ?? "未登録"} / ゴール地点 {selectedDetail.finishLocation ?? "未登録"} / 難易度 {raceDataDifficultyLabel(selectedDetail.courseDifficulty)}</Text>
                   {selectedDetail.verificationStatus !== "verified" && (
                     <Text style={styles.noticeText}>注意: この大会データには一部確認中または試算の項目があります。登録後も必ず公式サイトで確認してください。</Text>
                   )}
                   <Text style={styles.body}>{selectedDetail.courseSummary}</Text>
+                  <Text style={styles.noticeText}>本アプリは大会主催者が運営または公認する公式サービスではありません。大会要項やコースは変更される場合があります。参加前に必ず大会公式サイトで最新情報をご確認ください。</Text>
                 </Card>
                 <Card>
                   <Text style={styles.sectionTitle}>関門</Text>
@@ -1895,9 +1918,18 @@ export default function App() {
                   {selectedDetail.sections.map((section) => (
                     <View key={`${section.startKm}-${section.endKm}`} style={styles.courseMiniCard}>
                       <Text style={styles.listTitle}>{section.startKm} - {section.endKm}km / {terrainLabel(section.terrain)}</Text>
-                      <Text style={styles.muted}>{section.description ?? "-"} / 信頼度 {section.confidence ?? "low"}</Text>
+                      <Text style={styles.muted}>{section.description ?? "データなし"} / 上昇 {section.elevationGainM ?? "データなし"} / 下降 {section.elevationLossM ?? "データなし"} / 信頼度 {section.confidence ?? "unknown"}</Text>
                     </View>
                   ))}
+                </Card>
+                <Card>
+                  <Text style={styles.sectionTitle}>給水所</Text>
+                  {selectedDetail.waterStations?.length ? selectedDetail.waterStations.map((station) => (
+                    <View key={`${station.distanceKm}-${station.name ?? "water"}`} style={styles.courseMiniCard}>
+                      <Text style={styles.listTitle}>{station.distanceKm}km</Text>
+                      <Text style={styles.muted}>{station.name ?? "地点名未登録"} / 信頼度 {station.confidence ?? "unknown"}</Text>
+                    </View>
+                  )) : <Text style={styles.muted}>データなし</Text>}
                 </Card>
                 <Card>
                   <Text style={styles.sectionTitle}>公式情報リンク</Text>
@@ -1962,6 +1994,15 @@ export default function App() {
                         onSelect={(value) => setRaceDataMcc(value === "加盟" ? "yes" : value === "非加盟" ? "no" : "")}
                       />
                       <SelectField
+                        label="高低差データ"
+                        value={raceDataElevation === "yes" ? "あり" : raceDataElevation === "no" ? "なし" : "すべて"}
+                        options={["すべて", "あり", "なし"]}
+                        pickerId="race-data-elevation"
+                        activePicker={activePicker}
+                        setActivePicker={setActivePicker}
+                        onSelect={(value) => setRaceDataElevation(value === "あり" ? "yes" : value === "なし" ? "no" : "")}
+                      />
+                      <SelectField
                         label="コース難易度"
                         value={raceDataDifficulty || "すべて"}
                         options={RACE_DATA_DIFFICULTY_OPTIONS.map((value) => value || "すべて")}
@@ -1992,8 +2033,8 @@ export default function App() {
                       <Text style={styles.listTitle}>{race.name}</Text>
                       <Text style={[styles.usingBadge, race.verificationStatus !== "verified" && styles.warningBadge]}>{raceDataStatusLabel(race.verificationStatus)}</Text>
                     </View>
-                    <Text style={styles.muted}>{race.prefecture} {race.city ?? ""} / {race.eventDate ?? "日付未設定"} / {raceDataCategoryLabel(race.category)} {race.distanceKm}km</Text>
-                    <Text style={styles.muted}>制限 {race.timeLimitMinutes ? formatDurationJa(race.timeLimitMinutes * 60) : "-"} / 関門 {race.checkpoints.length}か所 / コース {raceDataDifficultyLabel(race.courseDifficulty)}</Text>
+                    <Text style={styles.muted}>{race.prefecture} {race.city ?? ""} / 年度 {race.year ?? "未登録"} / {race.eventDate ?? "開催日未登録"} / {raceDataCategoryLabel(race.category)} {race.distanceKm}km</Text>
+                    <Text style={styles.muted}>制限 {race.timeLimitMinutes ? formatDurationJa(race.timeLimitMinutes * 60) : "未登録"} / 関門 {race.checkpoints.length}か所 / 高低差 {race.sections.some((section) => section.terrain !== "unknown") ? "あり" : "データなし"} / コース {raceDataDifficultyLabel(race.courseDifficulty)}</Text>
                     <Text style={styles.helpText}>確認日 {race.verifiedAt ?? "-"} / 公式情報リンクあり</Text>
                     <View style={styles.buttonRow}>
                       <SecondaryButton label="詳細を見る" onPress={() => setRaceDataDetail(race)} />
