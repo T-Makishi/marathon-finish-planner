@@ -4,6 +4,7 @@ import { hokkaidoMarathon } from "./hokkaido-marathon";
 import { kanazawaMarathon } from "./kanazawa-marathon";
 import { kobeMarathon } from "./kobe-marathon";
 import { kyotoMarathon } from "./kyoto-marathon";
+import { nagoyaWomensMarathon } from "./nagoya-womens-marathon";
 import { nahaMarathon } from "./naha-marathon";
 import { osakaMarathon } from "./osaka-marathon";
 import { tokyoMarathon } from "./tokyo-marathon";
@@ -18,6 +19,7 @@ export const RACE_DATA_LIST: OfficialRaceData[] = [
   tokyoMarathon,
   kyotoMarathon,
   kobeMarathon,
+  nagoyaWomensMarathon,
   kanazawaMarathon,
   yokohamaMarathon,
   osakaMarathon
