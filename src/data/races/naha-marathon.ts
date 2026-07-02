@@ -4,10 +4,14 @@ export const nahaMarathon: OfficialRaceData = {
   id: "naha-marathon-2026",
   slug: "naha-marathon",
   name: "第40回記念NAHAマラソン",
+  officialName: "第40回記念NAHAマラソン",
   year: 2026,
   prefecture: "沖縄県",
   city: "那覇市",
   eventDate: "2026-12-06",
+  officialEventDate: "2026-12-06",
+  mccListedDate: null,
+  dateConflict: false,
   category: "full",
   distanceKm: 42.195,
   startLocation: "奥武山公園",
@@ -15,6 +19,7 @@ export const nahaMarathon: OfficialRaceData = {
   startTime: "09:00",
   timeLimitMinutes: 375,
   mccMember: false,
+  mccCategory: "other",
   startType: "single",
   courseDifficulty: "hard",
   courseSummary: "那覇市から南部5市町を通り、平和祈念公園を経由して奥武山陸上競技場へ戻るフルマラソン。公式サイトで確認できる大会概要、関門規制、競技中止勧告地点、リタイアバス地点を反映しています。",
@@ -47,11 +52,33 @@ export const nahaMarathon: OfficialRaceData = {
     { distanceKm: 34.3, name: "第2制限地点", type: "retire-bus", confidence: "high" }
   ],
   sources: [
-    { title: "NAHAマラソン公式サイト 大会概要", url: "https://naha-marathon.jp/info/", type: "official-web", accessedAt: "2026-07-02" },
-    { title: "NAHAマラソン公式サイト コース・関門規制", url: "https://naha-marathon.jp/course/", type: "official-web", accessedAt: "2026-07-02" }
+    {
+      title: "NAHAマラソン公式サイト 大会概要",
+      url: "https://naha-marathon.jp/info/",
+      type: "official-web",
+      accessedAt: "2026-07-02",
+      usageStatus: "public-facts-only",
+      usageNotes: ["大会概要に掲載された客観的な基本情報だけを参照しています。"]
+    },
+    {
+      title: "NAHAマラソン公式サイト コース・関門規制",
+      url: "https://naha-marathon.jp/course/",
+      type: "official-web",
+      accessedAt: "2026-07-02",
+      usageStatus: "public-facts-only",
+      usageNotes: ["関門時刻、距離、地点名などの客観情報だけを参照しています。コース図画像は保存・転載していません。"]
+    }
   ],
   verificationStatus: "partially-verified",
+  publicationAllowed: true,
   verifiedAt: "2026-07-02",
+  extractionWarnings: [
+    "高低差区間は公式画像や数値を転載せず、コース上の地点から作った参考目安です。精密な標高データではありません。"
+  ],
+  legalReviewNotes: [
+    "公式画像、ロゴ、コース図、PDF画像、長い公式説明文は保存・転載していません。",
+    "大会要項は変更される場合があるため、参加前に公式サイトで最新情報を確認してください。"
+  ],
   notes: [
     "大会基本情報、関門時刻、競技中止勧告地点、リタイアバス待機所は公式サイトの公開情報を参照しています。",
     "競技中止勧告地点は正式な関門とは異なりますが、完走計画上の安全確認地点として登録しています。",

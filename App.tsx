@@ -239,7 +239,7 @@ const MINUTE_OPTIONS = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "4
 const ADJUST_OPTIONS = ["-30", "-20", "-15", "-10", "-5", "0", "5", "10", "15", "20", "30", "45", "60"];
 const RACE_DATA_MONTH_OPTIONS = ["", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
 const RACE_DATA_CATEGORY_OPTIONS: Array<"" | RaceDataCategory> = ["", "full", "half", "ultra", "other"];
-const RACE_DATA_STATUS_OPTIONS: Array<"" | RaceDataStatus> = ["", "verified", "partially-verified", "previous-year", "unverified", "awaiting-official"];
+const RACE_DATA_STATUS_OPTIONS: Array<"" | RaceDataStatus> = ["", "verified", "partially-verified", "previous-year", "unverified", "awaiting-official", "needs-review"];
 const RACE_DATA_DIFFICULTY_OPTIONS: Array<"" | RaceDataDifficulty> = ["", "easy", "normal", "hard", "very-hard"];
 const SPLIT_DIFF_OPTIONS = ["0", "5", "10", "15", "20", "custom"];
 
@@ -597,7 +597,25 @@ function raceDataStatusLabel(value: string) {
   if (value === "previous-year") return "前年度情報";
   if (value === "unverified") return "未確認";
   if (value === "awaiting-official") return "公式発表待ち";
+  if (value === "needs-review") return "要確認";
   return "すべて";
+}
+
+function sourceUsageStatusLabel(value?: string) {
+  if (value === "allowed") return "利用可";
+  if (value === "public-facts-only") return "客観情報のみ";
+  if (value === "manual-review-required") return "人の確認が必要";
+  if (value === "prohibited") return "利用不可";
+  if (value === "unknown") return "未確認";
+  return "未設定";
+}
+
+function mccCategoryLabel(value?: string | null) {
+  if (value === "MCC") return "MCC";
+  if (value === "HMCC") return "HMCC";
+  if (value === "MCC100") return "MCC100";
+  if (value === "other") return "対象外";
+  return "未確認";
 }
 
 function raceDataDifficultyLabel(value: string | undefined) {
@@ -987,8 +1005,14 @@ export default function App() {
         data.courseSummary,
         data.startLocation ? `スタート地点: ${data.startLocation}` : "",
         data.finishLocation ? `ゴール地点: ${data.finishLocation}` : "",
+        data.mccCategory ? `MCC区分: ${mccCategoryLabel(data.mccCategory)}` : "",
+        data.officialEventDate ? `公式開催日: ${data.officialEventDate}` : "",
+        data.mccListedDate ? `MCC掲載日: ${data.mccListedDate}` : "",
         ...(data.notes ?? []),
+        ...(data.extractionWarnings ?? []).map((warning) => `抽出注意: ${warning}`),
+        ...(data.legalReviewNotes ?? []).map((note) => `利用注意: ${note}`),
         `データ状態: ${raceDataStatusLabel(data.verificationStatus)}`,
+        source?.usageStatus ? `利用方針: ${sourceUsageStatusLabel(source.usageStatus)}` : "",
         source ? `参照: ${source.title}（確認日 ${source.accessedAt}）` : ""
       ].filter(Boolean).join("\n"),
       raceDataId: data.id,
@@ -1047,7 +1071,9 @@ export default function App() {
       data.startTime ? "" : "スタート時刻",
       data.timeLimitMinutes ? "" : "制限時間",
       data.checkpoints.length ? "" : "関門",
-      data.sections.some((section) => section.terrain !== "unknown") ? "" : "高低差"
+      data.sections.some((section) => section.terrain !== "unknown") ? "" : "高低差",
+      data.publicationAllowed === false ? "公開利用条件の確認" : "",
+      data.dateConflict ? "開催日の再確認" : ""
     ].filter(Boolean);
   }
 
@@ -1913,8 +1939,15 @@ export default function App() {
                   <Text style={styles.sectionTitle}>{selectedDetail.name}</Text>
                   <Text style={styles.heroTitle}>{raceDataStatusLabel(selectedDetail.verificationStatus)}</Text>
                   <Text style={styles.body}>{selectedDetail.prefecture} {selectedDetail.city ?? ""} / 年度 {selectedDetail.year ?? "未登録"} / {selectedDetail.eventDate ?? "開催日未登録"} / {raceDataCategoryLabel(selectedDetail.category)} {selectedDetail.distanceKm}km</Text>
+                  <Text style={styles.helpText}>MCC区分 {mccCategoryLabel(selectedDetail.mccCategory)} / 公式日付 {selectedDetail.officialEventDate ?? "未確認"} / MCC掲載日 {selectedDetail.mccListedDate ?? "未確認"}</Text>
                   <Text style={styles.helpText}>スタート時刻 {selectedDetail.startTime ?? "未登録"} / 制限 {selectedDetail.timeLimitMinutes ? formatDurationJa(selectedDetail.timeLimitMinutes * 60) : "未登録"} / スタート方式 {selectedDetail.startType === "wave" ? "ウェーブ" : selectedDetail.startType === "single" ? "一斉" : "不明"}</Text>
                   <Text style={styles.helpText}>スタート地点 {selectedDetail.startLocation ?? "未登録"} / ゴール地点 {selectedDetail.finishLocation ?? "未登録"} / 難易度 {raceDataDifficultyLabel(selectedDetail.courseDifficulty)}</Text>
+                  {selectedDetail.dateConflict && (
+                    <Text style={styles.noticeText}>注意: 公式サイトの日付と外部一覧の日付が一致していません。登録前に公式サイトを優先して確認してください。</Text>
+                  )}
+                  {selectedDetail.publicationAllowed === false && (
+                    <Text style={styles.noticeText}>この大会データは公開不可の可能性があります。登録前に利用条件を確認してください。</Text>
+                  )}
                   {selectedDetail.verificationStatus !== "verified" && (
                     <Text style={styles.noticeText}>注意: この大会データには一部確認中または試算の項目があります。登録後も必ず公式サイトで確認してください。</Text>
                   )}
@@ -1962,9 +1995,22 @@ export default function App() {
                     <View key={`${source.title}-${source.url}`} style={styles.courseMiniCard}>
                       <Text style={styles.listTitle}>{source.title}</Text>
                       <Text style={styles.muted}>{source.url}</Text>
-                      <Text style={styles.helpText}>確認日: {source.accessedAt}</Text>
+                      <Text style={styles.helpText}>確認日: {source.accessedAt} / 利用方針: {sourceUsageStatusLabel(source.usageStatus)}</Text>
+                      {!!source.usageNotes?.length && source.usageNotes.map((note) => <Text key={note} style={styles.helpText}>・{note}</Text>)}
                     </View>
                   ))}
+                  {!!selectedDetail.extractionWarnings?.length && (
+                    <>
+                      <Text style={styles.sectionCaption}>抽出時の注意</Text>
+                      {selectedDetail.extractionWarnings.map((warning) => <Text key={warning} style={styles.noticeText}>・{warning}</Text>)}
+                    </>
+                  )}
+                  {!!selectedDetail.legalReviewNotes?.length && (
+                    <>
+                      <Text style={styles.sectionCaption}>著作権・利用上の注意</Text>
+                      {selectedDetail.legalReviewNotes.map((note) => <Text key={note} style={styles.helpText}>・{note}</Text>)}
+                    </>
+                  )}
                   {!!selectedDetail.notes?.length && selectedDetail.notes.map((note) => <Text key={note} style={styles.helpText}>・{note}</Text>)}
                 </Card>
                 <View style={styles.buttonRow}>
@@ -2060,7 +2106,8 @@ export default function App() {
                     </View>
                     <Text style={styles.muted}>{race.prefecture} {race.city ?? ""} / 年度 {race.year ?? "未登録"} / {race.eventDate ?? "開催日未登録"} / {raceDataCategoryLabel(race.category)} {race.distanceKm}km</Text>
                     <Text style={styles.muted}>制限 {race.timeLimitMinutes ? formatDurationJa(race.timeLimitMinutes * 60) : "未登録"} / 関門 {race.checkpoints.length}か所 / 高低差 {race.sections.some((section) => section.terrain !== "unknown") ? "あり" : "データなし"} / コース {raceDataDifficultyLabel(race.courseDifficulty)}</Text>
-                    <Text style={styles.helpText}>確認日 {race.verifiedAt ?? "-"} / 公式情報リンクあり</Text>
+                    <Text style={styles.helpText}>MCC区分 {mccCategoryLabel(race.mccCategory)} / 確認日 {race.verifiedAt ?? "-"} / 利用方針 {sourceUsageStatusLabel(race.sources[0]?.usageStatus)}</Text>
+                    {!!race.extractionWarnings?.length && <Text style={styles.noticeText}>{race.extractionWarnings[0]}</Text>}
                     <View style={styles.buttonRow}>
                       <SecondaryButton label="詳細を見る" onPress={() => setRaceDataDetail(race)} />
                       <PrimaryButton label="この大会を登録" onPress={() => confirmRegisterRaceData(race)} />
@@ -2098,12 +2145,15 @@ export default function App() {
                 <Text style={styles.muted}>種目: {raceDataCategoryLabel(data.category)} {data.distanceKm}km</Text>
                 <Text style={styles.muted}>スタート: {data.startTime ?? "未登録"} / 制限: {data.timeLimitMinutes ? formatDurationJa(data.timeLimitMinutes * 60) : "未登録"}</Text>
                 <Text style={styles.muted}>関門: {data.checkpoints.length}件 / 高低差: {raceDataHasElevation(data) ? "あり" : "データなし"}</Text>
+                <Text style={styles.muted}>MCC区分: {mccCategoryLabel(data.mccCategory)} / 利用方針: {sourceUsageStatusLabel(data.sources[0]?.usageStatus)}</Text>
                 <Text style={styles.muted}>未確認項目: {missingItems.length ? missingItems.join("、") : "なし"}</Text>
               </View>
               {existing && (
                 <Text style={styles.noticeText}>すでに同じ大会データから登録した大会があります。既存登録を更新するか、別大会として追加できます。</Text>
               )}
               <Text style={styles.noticeText}>{warning}</Text>
+              {!!data.extractionWarnings?.length && data.extractionWarnings.map((item) => <Text key={item} style={styles.noticeText}>・{item}</Text>)}
+              {!!data.legalReviewNotes?.length && data.legalReviewNotes.map((item) => <Text key={item} style={styles.helpText}>・{item}</Text>)}
               <Text style={styles.helpText}>本アプリは大会主催者が運営または公認する公式サービスではありません。参加前に必ず大会公式サイトで最新情報をご確認ください。</Text>
             </ScrollView>
             <View style={styles.confirmButtonRow}>
