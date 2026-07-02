@@ -8,12 +8,21 @@ type TemplateInput = {
   prefecture: string;
   city?: string;
   url: string;
+  category?: OfficialRaceData["category"];
+  distanceKm?: number;
   mccCategory?: MccCategory | null;
   mccListedDate?: string | null;
   sourceUsageStatus?: SourceUsageStatus;
 };
 
-export function createUnverifiedFullMarathonTemplate(input: TemplateInput): OfficialRaceData {
+export function createUnverifiedRaceTemplate(input: TemplateInput): OfficialRaceData {
+  const category = input.category ?? "full";
+  const distanceKm = input.distanceKm ?? (category === "half" ? 21.0975 : category === "ultra" ? 100 : 42.195);
+  const sections = Array.from({ length: Math.ceil(distanceKm / 5) }, (_, index) => {
+    const startKm = index * 5;
+    const endKm = Math.min((index + 1) * 5, distanceKm);
+    return { startKm, endKm, terrain: "unknown" as const, description: "高低差データなし", confidence: "unknown" as const };
+  });
   return {
     id: input.id,
     slug: input.slug,
@@ -26,8 +35,8 @@ export function createUnverifiedFullMarathonTemplate(input: TemplateInput): Offi
     officialEventDate: null,
     mccListedDate: input.mccListedDate ?? null,
     dateConflict: false,
-    category: "full",
-    distanceKm: 42.195,
+    category,
+    distanceKm,
     startLocation: null,
     finishLocation: null,
     startTime: null,
@@ -38,17 +47,7 @@ export function createUnverifiedFullMarathonTemplate(input: TemplateInput): Offi
     courseDifficulty: "unknown",
     courseSummary: "公式情報の確認待ちです。大会名、距離、公式サイトURLだけをひな型として登録しています。",
     checkpoints: [],
-    sections: [
-      { startKm: 0, endKm: 5, terrain: "unknown", description: "高低差データなし", confidence: "unknown" },
-      { startKm: 5, endKm: 10, terrain: "unknown", description: "高低差データなし", confidence: "unknown" },
-      { startKm: 10, endKm: 15, terrain: "unknown", description: "高低差データなし", confidence: "unknown" },
-      { startKm: 15, endKm: 20, terrain: "unknown", description: "高低差データなし", confidence: "unknown" },
-      { startKm: 20, endKm: 25, terrain: "unknown", description: "高低差データなし", confidence: "unknown" },
-      { startKm: 25, endKm: 30, terrain: "unknown", description: "高低差データなし", confidence: "unknown" },
-      { startKm: 30, endKm: 35, terrain: "unknown", description: "高低差データなし", confidence: "unknown" },
-      { startKm: 35, endKm: 40, terrain: "unknown", description: "高低差データなし", confidence: "unknown" },
-      { startKm: 40, endKm: 42.195, terrain: "unknown", description: "高低差データなし", confidence: "unknown" }
-    ],
+    sections,
     waterStations: [],
     sources: [{
       title: `${input.name} 公式サイト`,
@@ -76,4 +75,8 @@ export function createUnverifiedFullMarathonTemplate(input: TemplateInput): Offi
       "公式画像、ロゴ、コース図、公式文章は保存・転載していません。"
     ]
   };
+}
+
+export function createUnverifiedFullMarathonTemplate(input: TemplateInput): OfficialRaceData {
+  return createUnverifiedRaceTemplate({ ...input, category: "full", distanceKm: 42.195 });
 }

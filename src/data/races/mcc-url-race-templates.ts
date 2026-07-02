@@ -1,0 +1,130 @@
+import type { MccCategory, OfficialRaceData } from "../raceData";
+import { createUnverifiedRaceTemplate } from "./templates";
+
+type UrlRaceInput = {
+  slug: string;
+  name: string;
+  prefecture: string;
+  city?: string;
+  url: string;
+  mccCategory: MccCategory;
+  category: OfficialRaceData["category"];
+  distanceKm: number;
+};
+
+const urlRaceInputs: UrlRaceInput[] = [
+  { slug: "nagano-marathon", name: "長野マラソン", prefecture: "長野県", city: "長野市", url: "https://www.naganomarathon.gr.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "oshu-kirameki-marathon", name: "いわて奥州きらめきマラソン", prefecture: "岩手県", city: "奥州市", url: "https://oshukirameki.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "toyako-marathon", name: "洞爺湖マラソン", prefecture: "北海道", city: "洞爺湖町", url: "https://www.toyako-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "kurobe-meisui-marathon", name: "カーター記念黒部名水マラソン", prefecture: "富山県", city: "黒部市", url: "https://www.kurobe-taikyo.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "hakodate-marathon", name: "函館マラソン", prefecture: "北海道", city: "函館市", url: "https://hakodate-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "wakkanai-marathon", name: "日本最北端わっかない平和マラソン", prefecture: "北海道", city: "稚内市", url: "https://wakkanai-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "abashiri-marathon", name: "オホーツク網走マラソン", prefecture: "北海道", city: "網走市", url: "https://www.abashiri-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "betsukai-marathon", name: "別海町パイロットマラソン", prefecture: "北海道", city: "別海町", url: "https://betsukai-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "iwate-morioka-city-marathon", name: "いわて盛岡シティマラソン", prefecture: "岩手県", city: "盛岡市", url: "https://iwate-morioka-city-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "niigata-city-marathon", name: "新潟シティマラソン", prefecture: "新潟県", city: "新潟市", url: "https://runfes-niigata.com/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "nagai-marathon", name: "長井マラソン", prefecture: "山形県", city: "長井市", url: "https://nagai-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "shimada-marathon", name: "しまだ大井川マラソンinリバティ", prefecture: "静岡県", city: "島田市", url: "https://www.shimada-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "mito-komon-marathon", name: "水戸黄門漫遊マラソン", prefecture: "茨城県", city: "水戸市", url: "https://mitokomon-manyu-marathon.com/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "kanazawa-marathon", name: "金沢マラソン", prefecture: "石川県", city: "金沢市", url: "https://www.kanazawa-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "toyama-marathon", name: "富山マラソン", prefecture: "富山県", city: "富山市", url: "https://www.toyamamarathon.com/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "shimonoseki-kaikyo-marathon", name: "下関海響マラソン", prefecture: "山口県", city: "下関市", url: "https://kaikyomarathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "gunma-marathon", name: "ぐんまマラソン", prefecture: "群馬県", city: "前橋市", url: "https://www.g-marathon.com/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "makomanai-marathon", name: "作.AC 真駒内マラソン", prefecture: "北海道", city: "札幌市", url: "https://sakumara.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "fukuoka-marathon", name: "福岡マラソン", prefecture: "福岡県", city: "福岡市", url: "https://www.f-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "hitachi-seaside-marathon", name: "ひたちシーサイドマラソン", prefecture: "茨城県", city: "ひたちなか市", url: "https://hitachi-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "kobe-marathon", name: "神戸マラソン", prefecture: "兵庫県", city: "神戸市", url: "https://kobe-marathon.net/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "fukuchiyama-marathon", name: "福知山マラソン", prefecture: "京都府", city: "福知山市", url: "https://fukuchiyama-marathon.com/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "ohtawara-marathon", name: "大田原マラソン", prefecture: "栃木県", city: "大田原市", url: "https://www.ohtawara-marathon.com/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "yoron-marathon", name: "ヨロンマラソン", prefecture: "鹿児島県", city: "与論町", url: "https://www.yoronmarathon.com/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "hofu-marathon", name: "防府マラソン", prefecture: "山口県", city: "防府市", url: "https://hofu-yomiuri.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "matsuejo-marathon", name: "国宝松江城マラソン", prefecture: "島根県", city: "松江市", url: "https://www.matsuejo-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "mt-fuji-marathon", name: "富士山マラソン", prefecture: "山梨県", city: "富士河口湖町", url: "https://mtfujimarathon.com/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "nara-marathon", name: "奈良マラソン", prefecture: "奈良県", city: "奈良市", url: "https://www.nara-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "aoshima-taiheiyo-marathon", name: "青島太平洋マラソン", prefecture: "宮崎県", city: "宮崎市", url: "https://www.aotai.gr.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "mie-matsusaka-marathon", name: "みえ松阪マラソン", prefecture: "三重県", city: "松阪市", url: "https://mie-matsusaka-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "ibusuki-nanohana-marathon", name: "いぶすき菜の花マラソン", prefecture: "鹿児島県", city: "指宿市", url: "https://ibusuki-nanohana.com/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "nishio-marathon", name: "にしおマラソン", prefecture: "愛知県", city: "西尾市", url: "https://nishio-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "ishigakijima-marathon", name: "石垣島マラソン", prefecture: "沖縄県", city: "石垣市", url: "https://www.ishigakijima-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "tateyama-wakasio-marathon", name: "館山若潮マラソン", prefecture: "千葉県", city: "館山市", url: "https://tateyama-wakasio.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "katsuta-marathon", name: "勝田全国マラソン", prefecture: "茨城県", city: "ひたちなか市", url: "https://katsutamarathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "ehime-marathon", name: "愛媛マラソン", prefecture: "愛媛県", city: "松山市", url: "https://ehimemarathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "beppu-oita-mainichi-marathon", name: "別府大分毎日マラソン", prefecture: "大分県", city: "大分市", url: "https://www.betsudai.com/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "saitama-marathon", name: "さいたまマラソン", prefecture: "埼玉県", city: "さいたま市", url: "https://saitama-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "kumamoto-castle-marathon", name: "熊本城マラソン", prefecture: "熊本県", city: "熊本市", url: "https://kumamotojyo-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "kyoto-marathon", name: "京都マラソン", prefecture: "京都府", city: "京都市", url: "https://kyoto-marathon.com/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "kochi-ryoma-marathon", name: "高知龍馬マラソン", prefecture: "高知県", city: "高知市", url: "https://ryoma-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "kitakyushu-marathon", name: "北九州マラソン", prefecture: "福岡県", city: "北九州市", url: "https://kitakyushu-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "iwaki-sunshine-marathon", name: "いわきサンシャインマラソン", prefecture: "福島県", city: "いわき市", url: "https://iwaki-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "himeji-castle-marathon", name: "世界遺産姫路城マラソン", prefecture: "兵庫県", city: "姫路市", url: "https://himeji-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "tamana-idaten-marathon", name: "玉名いだてんマラソン", prefecture: "熊本県", city: "玉名市", url: "https://ichigo-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "tambasasayama-abc-marathon", name: "丹波篠山ABCマラソン", prefecture: "兵庫県", city: "丹波篠山市", url: "https://tambasasayama-abc-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "kagoshima-marathon", name: "鹿児島マラソン", prefecture: "鹿児島県", city: "鹿児島市", url: "https://www.kagoshima-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "shizuoka-marathon", name: "静岡マラソン", prefecture: "静岡県", city: "静岡市", url: "https://www.shizuoka-marathon.com/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "biwako-marathon", name: "びわ湖マラソン", prefecture: "滋賀県", city: "大津市", url: "https://biwako-marathon.com/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "itabashi-city-marathon", name: "板橋Cityマラソン", prefecture: "東京都", city: "板橋区", url: "https://i-c-m.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "kagawa-marathon", name: "かがわマラソン", prefecture: "香川県", city: "高松市", url: "https://kagawa-marathon.com/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "tottori-marathon", name: "鳥取マラソン", prefecture: "鳥取県", city: "鳥取市", url: "https://tottori-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "saga-sakura-marathon", name: "さが桜マラソン", prefecture: "佐賀県", city: "佐賀市", url: "https://sagasakura-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "tokushima-marathon", name: "とくしまマラソン", prefecture: "徳島県", city: "徳島市", url: "https://www.tokushima-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+  { slug: "fukui-sakura-marathon", name: "ふくい桜マラソン", prefecture: "福井県", city: "福井市", url: "https://www.fukui-sakura-marathon.jp/", mccCategory: "MCC", category: "full", distanceKm: 42.195 },
+
+  { slug: "yaizu-minato-marathon", name: "焼津みなとマラソン", prefecture: "静岡県", city: "焼津市", url: "https://www.yaizuminato-marathon.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "shima-road-party-half-marathon", name: "志摩ロードパーティハーフマラソン", prefecture: "三重県", city: "志摩市", url: "https://shima.roadparty.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "hanamaki-half-marathon", name: "イーハトーブ花巻ハーフマラソン", prefecture: "岩手県", city: "花巻市", url: "https://hanamaki-half.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "uozu-shinkirou-marathon", name: "魚津しんきろうマラソン", prefecture: "富山県", city: "魚津市", url: "https://www.uozu-shinkirou-marathon.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "sendai-half-marathon", name: "仙台国際ハーフマラソン", prefecture: "宮城県", city: "仙台市", url: "https://www.sendaihalf.com/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "hachinohe-umineko-marathon", name: "八戸うみねこマラソン全国大会", prefecture: "青森県", city: "八戸市", url: "https://event-guide.daily-tohoku.news/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "fujiyoshida-himatsuri-road-race", name: "富士吉田火祭りロードレース", prefecture: "山梨県", city: "富士吉田市", url: "https://www.himatsuri-roadrace.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "yatsugatake-kogen-half-marathon", name: "八ヶ岳高原ハーフマラソン", prefecture: "山梨県", city: "北杜市", url: "https://www.hokuto-kanko.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "shiratakawa-akaayu-marathon", name: "白鷹若鮎マラソン大会", prefecture: "山形県", city: "白鷹町", url: "https://www.town.shirataka.lg.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "ichinoseki-half-marathon", name: "一関国際ハーフマラソン", prefecture: "岩手県", city: "一関市", url: "https://ichinoseki-half.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "yamagata-marugoto-marathon", name: "山形まるごとマラソン", prefecture: "山形県", city: "山形市", url: "https://yamagata-city-marathon.com/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "sapporo-marathon", name: "札幌マラソン", prefecture: "北海道", city: "札幌市", url: "https://satumara.sapporo-sport.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "maizuru-akarenga-half-marathon", name: "舞鶴赤れんがハーフマラソン", prefecture: "京都府", city: "舞鶴市", url: "https://maizuruakarenga-marathon.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "tobetsu-sweden-marathon", name: "当別スウェーデンマラソン", prefecture: "北海道", city: "当別町", url: "https://www.tobetsu-sweden-marathon.com/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "teganuma-eco-marathon", name: "手賀沼エコマラソン", prefecture: "千葉県", city: "柏市", url: "https://teganuma-eco.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "suwako-marathon", name: "諏訪湖マラソン", prefecture: "長野県", city: "諏訪市", url: "https://suwako.marathon.fm/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "tendo-lafrance-marathon", name: "天童ラ・フランスマラソン", prefecture: "山形県", city: "天童市", url: "https://www.lafrance-marathon.com/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "chikugogawa-marathon", name: "筑後川マラソン", prefecture: "福岡県", city: "久留米市", url: "https://chikugogawa-m.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "wakayama-jazz-marathon", name: "和歌山ジャズマラソン", prefecture: "和歌山県", city: "和歌山市", url: "https://www.city.wakayama.wakayama.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "ibigawa-marathon", name: "いびがわマラソン", prefecture: "岐阜県", city: "揖斐川町", url: "https://ibigawa-marathon.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "minato-city-half-marathon", name: "MINATOシティハーフマラソン", prefecture: "東京都", city: "港区", url: "https://minato-half.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "jubilo-iwata-marathon", name: "ジュビロ磐田メモリアルマラソン", prefecture: "静岡県", city: "磐田市", url: "https://www.jubilo-marathon.com/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "running-sakurajima", name: "ランニング桜島", prefecture: "鹿児島県", city: "鹿児島市", url: "https://www.runningsakurajima.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "tokai-half-marathon", name: "東海ハーフマラソン", prefecture: "愛知県", city: "東海市", url: "https://www.tokai-halfmarathon.com/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "ogaki-marathon", name: "おおがきマラソン", prefecture: "岐阜県", city: "大垣市", url: "https://www.ogaki-marason.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "kameoka-half-marathon", name: "京都亀岡ハーフマラソン", prefecture: "京都府", city: "亀岡市", url: "https://kameoka-half-marathon.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "hagi-joukamachi-marathon", name: "維新の里 萩城下町マラソン", prefecture: "山口県", city: "萩市", url: "https://hagi-joukamachi-marathon.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "kasama-tougei-half-marathon", name: "かさま陶芸の里ハーフマラソン", prefecture: "茨城県", city: "笠間市", url: "https://www.kasa-mara.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "shonan-fujisawa-city-marathon", name: "湘南藤沢市民マラソン", prefecture: "神奈川県", city: "藤沢市", url: "https://shonan-fujisawacity-marathon.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "kagawa-marugame-half-marathon", name: "香川丸亀国際ハーフマラソン", prefecture: "香川県", city: "丸亀市", url: "https://www.km-half.com/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "fuji-marathon-festa", name: "富士マラソンフェスタ", prefecture: "静岡県", city: "小山町", url: "https://fuji-marathon-festa.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "kanagawa-marathon", name: "神奈川マラソン", prefecture: "神奈川県", city: "横浜市", url: "https://kanagawa-marathon.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "moriya-half-marathon", name: "守谷ハーフマラソン", prefecture: "茨城県", city: "守谷市", url: "https://www.moriya-half.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "hamamatsu-city-marathon", name: "浜松シティマラソン", prefecture: "静岡県", city: "浜松市", url: "https://www.hamamatsu-city-marathon.com/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "yokoshima-ichigo-marathon", name: "横島いちごマラソン大会", prefecture: "熊本県", city: "玉名市", url: "https://ichigo-marathon.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "inuyama-half-marathon", name: "読売犬山ハーフマラソン", prefecture: "愛知県", city: "犬山市", url: "https://www.inuyamahalf.com/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "katsushika-fureai-runfesta", name: "かつしかふれあいRUNフェスタ", prefecture: "東京都", city: "葛飾区", url: "https://www.katsushika-fureai-runfesta.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "niigata-half-marathon", name: "新潟ハーフマラソン", prefecture: "新潟県", city: "新潟市", url: "https://n-halfmarathon.jp/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+  { slug: "honokuni-toyohashi-half-marathon", name: "穂の国・豊橋ハーフマラソン", prefecture: "愛知県", city: "豊橋市", url: "https://honokuni-runner.com/", mccCategory: "HMCC", category: "half", distanceKm: 21.0975 },
+
+  { slug: "saroma-lake-100km-ultra-marathon", name: "サロマ湖100kmウルトラマラソン", prefecture: "北海道", city: "湧別町", url: "https://saromanblue.jp/", mccCategory: "MCC100", category: "ultra", distanceKm: 100 },
+  { slug: "shimanto-river-ultra-marathon", name: "四万十川ウルトラマラソン", prefecture: "高知県", city: "四万十市", url: "https://shimanto-ultra.jp/", mccCategory: "MCC100", category: "ultra", distanceKm: 100 },
+  { slug: "okinawa-100k-ultra-marathon", name: "沖縄100Kウルトラマラソン", prefecture: "沖縄県", city: "南城市", url: "https://www.okinawa100k.jp/", mccCategory: "MCC100", category: "ultra", distanceKm: 100 }
+];
+
+export const mccUrlRaceTemplates: OfficialRaceData[] = urlRaceInputs.map((race) =>
+  createUnverifiedRaceTemplate({
+    id: `${race.slug}-url-template`,
+    slug: race.slug,
+    name: race.name,
+    prefecture: race.prefecture,
+    city: race.city,
+    url: race.url,
+    category: race.category,
+    distanceKm: race.distanceKm,
+    mccCategory: race.mccCategory,
+    sourceUsageStatus: "manual-review-required"
+  })
+);
