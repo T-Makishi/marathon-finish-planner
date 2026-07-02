@@ -769,6 +769,7 @@ export default function App() {
   const [activePicker, setActivePicker] = useState<string | null>(null);
   const [raceDataOpen, setRaceDataOpen] = useState(false);
   const [raceDataDetail, setRaceDataDetail] = useState<OfficialRaceData | null>(null);
+  const [raceDataConfirm, setRaceDataConfirm] = useState<OfficialRaceData | null>(null);
   const [raceDataQuery, setRaceDataQuery] = useState("");
   const [raceDataPrefecture, setRaceDataPrefecture] = useState("");
   const [raceDataMonth, setRaceDataMonth] = useState("");
@@ -1026,37 +1027,33 @@ export default function App() {
     });
     setRaceForm(emptyRace);
     setRaceDataDetail(null);
+    setRaceDataConfirm(null);
     setRaceDataOpen(false);
     setRaceSection("大会");
     setTab("大会");
   }
 
-  function confirmRegisterRaceData(data: OfficialRaceData) {
+  function findExistingRaceDataRegistration(data: OfficialRaceData) {
     const dataYear = data.year == null ? "" : String(data.year);
-    const existing = store.races.find((race) => (race.raceDataId === data.id || race.sourceRaceId === data.id) && (!dataYear || race.raceDataYear === dataYear || race.sourceRaceYear === dataYear));
-    const missingItems = [
+    return store.races.find((race) => (race.raceDataId === data.id || race.sourceRaceId === data.id) && (!dataYear || race.raceDataYear === dataYear || race.sourceRaceYear === dataYear));
+  }
+
+  function raceDataMissingItems(data: OfficialRaceData) {
+    return [
       data.eventDate ? "" : "開催日",
       data.startTime ? "" : "スタート時刻",
       data.timeLimitMinutes ? "" : "制限時間",
       data.checkpoints.length ? "" : "関門",
       data.sections.some((section) => section.terrain !== "unknown") ? "" : "高低差"
-    ].filter(Boolean).join("、") || "なし";
-    const warning = data.verificationStatus === "verified"
-      ? "公式情報として確認済みの範囲を大会登録へ反映します。"
-      : "未確認または一部確認済みの項目があります。登録後も公式サイトで必ず確認してください。";
-    const summary = `${data.name}\n年度: ${data.year ?? "未登録"}\n開催日: ${data.eventDate ?? "未登録"}\n制限時間: ${data.timeLimitMinutes ? formatDurationJa(data.timeLimitMinutes * 60) : "未登録"}\n関門: ${data.checkpoints.length}件\n高低差: ${data.sections.some((section) => section.terrain !== "unknown") ? "あり" : "データなし"}\n未確認項目: ${missingItems}`;
-    if (existing) {
-      Alert.alert("登録済みの大会です", `${summary}\n\n${warning}\n\n既存の登録を更新するか、別の大会として追加できます。`, [
-        { text: "キャンセル", style: "cancel" },
-        { text: "別大会として追加", onPress: () => registerRaceData(data, "add") },
-        { text: "既存登録を更新", onPress: () => registerRaceData(data, "update") }
-      ]);
-      return;
-    }
-    Alert.alert("登録内容を確認", `${summary}\n\n${warning}`, [
-      { text: "キャンセル", style: "cancel" },
-      { text: "この内容で登録する", onPress: () => registerRaceData(data, "add") }
-    ]);
+    ].filter(Boolean);
+  }
+
+  function raceDataHasElevation(data: OfficialRaceData) {
+    return data.sections.some((section) => section.terrain !== "unknown");
+  }
+
+  function confirmRegisterRaceData(data: OfficialRaceData) {
+    setRaceDataConfirm(data);
   }
 
   function deleteRace(id: string) {
@@ -1459,6 +1456,7 @@ export default function App() {
           ))}
         </View>
         {renderRaceDataSearchModal()}
+        {renderRaceDataConfirmModal()}
         {showOpening && renderOpening()}
       </View>
     </SafeAreaView>
@@ -2047,6 +2045,53 @@ export default function App() {
             )}
           </ScrollView>
         </SafeAreaView>
+      </Modal>
+    );
+  }
+
+  function renderRaceDataConfirmModal() {
+    const data = raceDataConfirm;
+    if (!data) return null;
+    const existing = findExistingRaceDataRegistration(data);
+    const missingItems = raceDataMissingItems(data);
+    const warning = data.verificationStatus === "verified"
+      ? "公式情報として確認済みの範囲を大会登録へ反映します。"
+      : "未確認または一部確認済みの項目があります。登録後も公式サイトで必ず確認してください。";
+
+    return (
+      <Modal visible={!!data} transparent animationType="fade" onRequestClose={() => setRaceDataConfirm(null)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.confirmSheet}>
+            <ScrollView contentContainerStyle={styles.confirmSheetInner}>
+              <Text style={styles.sectionTitle}>{existing ? "登録済みの大会です" : "登録内容を確認"}</Text>
+              <Text style={styles.heroTitle}>{data.name}</Text>
+              <Text style={styles.body}>{data.prefecture} {data.city ?? ""} / 年度 {data.year ?? "未登録"} / {data.eventDate ?? "開催日未登録"}</Text>
+              <View style={styles.courseMiniCard}>
+                <Text style={styles.listTitle}>登録される内容</Text>
+                <Text style={styles.muted}>種目: {raceDataCategoryLabel(data.category)} {data.distanceKm}km</Text>
+                <Text style={styles.muted}>スタート: {data.startTime ?? "未登録"} / 制限: {data.timeLimitMinutes ? formatDurationJa(data.timeLimitMinutes * 60) : "未登録"}</Text>
+                <Text style={styles.muted}>関門: {data.checkpoints.length}件 / 高低差: {raceDataHasElevation(data) ? "あり" : "データなし"}</Text>
+                <Text style={styles.muted}>未確認項目: {missingItems.length ? missingItems.join("、") : "なし"}</Text>
+              </View>
+              {existing && (
+                <Text style={styles.noticeText}>すでに同じ大会データから登録した大会があります。既存登録を更新するか、別大会として追加できます。</Text>
+              )}
+              <Text style={styles.noticeText}>{warning}</Text>
+              <Text style={styles.helpText}>本アプリは大会主催者が運営または公認する公式サービスではありません。参加前に必ず大会公式サイトで最新情報をご確認ください。</Text>
+            </ScrollView>
+            <View style={styles.confirmButtonRow}>
+              <SecondaryButton label="キャンセル" onPress={() => setRaceDataConfirm(null)} />
+              {existing ? (
+                <>
+                  <SecondaryButton label="別大会として追加" onPress={() => registerRaceData(data, "add")} />
+                  <PrimaryButton label="既存登録を更新" onPress={() => registerRaceData(data, "update")} />
+                </>
+              ) : (
+                <PrimaryButton label="この内容で登録する" onPress={() => registerRaceData(data, "add")} />
+              )}
+            </View>
+          </View>
+        </View>
       </Modal>
     );
   }
@@ -3106,6 +3151,9 @@ const styles = StyleSheet.create({
   selectArrow: { color: "#64736a", fontSize: 12, fontWeight: "800" },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(38,50,56,0.35)", justifyContent: "center", padding: 18 },
   pickerSheet: { maxHeight: "82%", backgroundColor: "#fffdf8", borderRadius: 8, borderWidth: 1, borderColor: "#e2ded2", overflow: "hidden" },
+  confirmSheet: { maxHeight: "88%", backgroundColor: "#fffdf8", borderRadius: 8, borderWidth: 1, borderColor: "#e2ded2", padding: 14 },
+  confirmSheetInner: { paddingBottom: 8 },
+  confirmButtonRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, borderTopWidth: 1, borderTopColor: "#ebe7dc", paddingTop: 12, marginTop: 8 },
   pickerHeader: { minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: "#e2ded2", backgroundColor: "#f6f3ee" },
   pickerTitle: { flex: 1, color: "#263238", fontSize: 16, fontWeight: "900" },
   modalCloseButton: { minHeight: 36, borderRadius: 8, backgroundColor: "#e6eee8", alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
