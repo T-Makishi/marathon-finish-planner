@@ -2322,13 +2322,6 @@ export default function App() {
         {renderSelectedRaceContext(planSection === "作成" ? "プラン対象大会" : `${planSection}の対象大会`)}
         {planSection === "作成" && (
           <Card>
-            <Text style={styles.sectionTitle}>関門・ゴール逆算プラン</Text>
-            <RacePicker races={raceOptions} selectedId={selectedRaceId} onSelect={(id) => {
-              selectRace(id);
-              setPlanSavedMessage("");
-              const existing = store.plans.find((plan) => plan.raceId === id);
-              setPlanForm(existing ?? { ...emptyPlan, raceId: id });
-            }} />
             <View style={styles.explainBox}>
               <Text style={styles.explainTitle}>計算の考え方</Text>
               <Text style={styles.body}>入力方法は「何時間でゴールするか」を決めます。ペースタイプは「前半と後半にどう配分するか」を決めます。</Text>
