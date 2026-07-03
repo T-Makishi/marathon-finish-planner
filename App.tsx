@@ -1385,7 +1385,7 @@ export default function App() {
       formatMinutesLabel(row.gateMarginSec),
       row.terrainAdjustmentSec ? `${row.terrainAdjustmentSec > 0 ? "+" : ""}${Math.round(row.terrainAdjustmentSec)}秒 ${row.terrainMemo ?? ""}` : row.terrainMemo ?? "",
       row.stopSec ? `+${row.stopSec}秒 ${row.stopMemo ?? ""}` : "",
-      [row.gate?.name, row.gate?.memo, row.terrainMemo, row.stopMemo, row.manual ? "手動調整" : ""].filter(Boolean).join(" / ")
+      [row.gate?.name, row.gate?.memo, row.manual ? "手動調整" : ""].filter(Boolean).join(" / ")
     ]);
     const csv = "\uFEFF" + [header, ...lines].map((line) => line.map(escapeCsv).join(",")).join("\n");
     const safeName = (selectedRace?.name || "race-plan").replace(/[\\/:*?"<>|]/g, "_");
@@ -1414,7 +1414,7 @@ export default function App() {
             ? `${row.terrainAdjustmentSec > 0 ? "+" : ""}${Math.round(row.terrainAdjustmentSec)}秒<br>${escapeHtml(row.terrainMemo)}`
             : escapeHtml(row.terrainMemo);
           const stopText = row.stopSec ? `+${row.stopSec}秒<br>${escapeHtml(row.stopMemo)}` : "";
-          const memoText = [row.gate?.name, row.gate?.memo, row.terrainMemo, row.stopMemo, row.manual ? "手動調整" : ""].filter(Boolean).map(escapeHtml).join("<br>");
+          const memoText = [row.gate?.name, row.gate?.memo, row.manual ? "手動調整" : ""].filter(Boolean).map(escapeHtml).join("<br>");
           return `<tr><td>${escapeHtml(row.gate?.distanceKm ?? row.km)}</td><td>${escapeHtml(formatDuration(row.adjustedLapSec))}</td><td>${escapeHtml(row.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes))}</td><td>${escapeHtml(row.gate?.gateTime ?? "")}</td><td>${escapeHtml(formatMinutesLabel(row.gateMarginSec))}</td><td>${terrainText}</td><td>${stopText}</td><td>${memoText}</td></tr>`;
         }
       )
