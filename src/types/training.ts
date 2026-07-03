@@ -69,7 +69,7 @@ export type TrainingSummary = {
 
 export type TrainingReadinessScore = {
   total: number;
-  label: "順調" | "やや注意" | "準備を増やしたい" | "目標見直し推奨";
+  label: "順調" | "あと少し確認" | "もう少し準備したい" | "練習データが少なめです";
   details: {
     last30Distance: number;
     last90Distance: number;

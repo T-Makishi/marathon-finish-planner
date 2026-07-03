@@ -305,7 +305,7 @@ export function calculateReadinessScore(args: {
   const details = { last30Distance, last90Distance, longestDistance, trainingCount, paceDiff: paceDiffScore, gateMargin };
   const total = clampScore(Object.values(details).reduce((sum, value) => sum + value, 0));
   const suggestions = buildSuggestions(args.summary, raceDistance, paceDiff, args.minGateMarginSec);
-  return { total, label: total >= 80 ? "順調" : total >= 60 ? "やや注意" : total >= 40 ? "準備を増やしたい" : "目標見直し推奨", details, suggestions };
+  return { total, label: total >= 80 ? "順調" : total >= 60 ? "あと少し確認" : total >= 40 ? "もう少し準備したい" : "練習データが少なめです", details, suggestions };
 }
 
 function distanceScore(value: number, thresholds: number[], scores: number[]) {
@@ -319,9 +319,9 @@ function clampScore(value: number) {
 
 function buildSuggestions(summary: TrainingSummary, raceDistance: number, paceDiff: number | null, minGateMarginSec?: number | null) {
   const suggestions: string[] = [];
-  if (summary.last30DistanceKm < Math.max(30, raceDistance * 1.4)) suggestions.push("直近30日の走行距離を少し増やすとスコアが上がります。");
+  if (summary.last30DistanceKm < Math.max(30, raceDistance * 1.4)) suggestions.push("直近30日の走行距離を少し増やすと判断材料が増えます。");
   if (summary.last90LongestDistanceKm < Math.min(20, raceDistance * 0.5)) suggestions.push("長めの練習記録がまだ少なめです。");
-  if (paceDiff != null && paceDiff > 20) suggestions.push("目標ペースとの差があるため、計画ペースを確認してください。");
+  if (paceDiff != null && paceDiff > 20) suggestions.push("目標ペースとの差があるため、計画ペースが現実的か確認してください。");
   if (minGateMarginSec != null && minGateMarginSec < 5 * 60) suggestions.push("関門余裕が5分未満のため、目標ペースを確認してください。");
   return suggestions.slice(0, 3);
 }

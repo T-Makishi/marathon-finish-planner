@@ -1687,7 +1687,8 @@ export default function App() {
   }
 
   function renderTrainingAnalysis() {
-    const scoreDetailsOpen = trainingSection === "スコア";
+    const normalizedTrainingSection = trainingSection === "スコア" ? "理由" : trainingSection;
+    const scoreDetailsOpen = normalizedTrainingSection === "理由";
     return (
       <>
         <Card>
@@ -1701,8 +1702,8 @@ export default function App() {
           </View>
           {!!trainingImportMessage && <Text style={styles.savedText}>{trainingImportMessage}</Text>}
         </Card>
-        <Segment value={trainingSection} values={["概要", "履歴", "管理", "スコア"]} onChange={setTrainingSection} />
-        {trainingSection === "概要" && (
+        <Segment value={normalizedTrainingSection} values={["概要", "履歴", "管理", "理由"]} onChange={setTrainingSection} />
+        {normalizedTrainingSection === "概要" && (
           <>
             {renderTrainingComparisonCard()}
             <View style={styles.grid2}>
@@ -1713,8 +1714,13 @@ export default function App() {
               <Metric label="練習回数（30日）" value={`${trainingSummary.last30Count}回`} />
               <Metric label="平均ペース（30日）" value={formatPace(trainingSummary.last30AveragePaceSec)} />
               <Metric label="最長走行距離" value={`${formatKm(trainingSummary.allLongestDistanceKm)}km`} />
-              <Metric label="完走準備度" value={`${trainingScore.total}点 ${trainingScore.label}`} />
+              <Metric label="練習状況チェック" value={`${trainingScore.total}点 ${trainingScore.label}`} />
             </View>
+            <Card>
+              <Text style={styles.sectionTitle}>スコアの見方</Text>
+              <Text style={styles.body}>この点数は、練習データと大会プランを比べた参考値です。完走や体調を保証するものではありません。</Text>
+              <Text style={styles.helpText}>点数が低いときは「失敗」ではなく、まだ判断材料が少ない、または目標ペースとの差が大きいという意味です。理由タブで内訳を確認できます。</Text>
+            </Card>
             <Card>
               <Text style={styles.sectionTitle}>直近練習データ</Text>
               <Text style={styles.helpText}>直近50件まで表示します。ランニング以外のデータは主要集計に含まれません。</Text>
@@ -1730,7 +1736,7 @@ export default function App() {
             </Card>
           </>
         )}
-        {trainingSection === "履歴" && (
+        {normalizedTrainingSection === "履歴" && (
           <Card>
             <Text style={styles.sectionTitle}>CSV取込履歴</Text>
             {store.trainingImportBatches.length ? store.trainingImportBatches.map((batch) => (
@@ -1744,7 +1750,7 @@ export default function App() {
             )) : <Text style={styles.muted}>取込履歴はありません。</Text>}
           </Card>
         )}
-        {trainingSection === "管理" && (
+        {normalizedTrainingSection === "管理" && (
           <Card>
             <Text style={styles.sectionTitle}>練習データ管理</Text>
             <Text style={styles.body}>練習データは端末内に保存されます。ブラウザデータ削除や端末変更により失われる場合があります。バックアップ機能を使うと練習データも含めて保存できます。</Text>
@@ -1754,17 +1760,22 @@ export default function App() {
         )}
         {scoreDetailsOpen && (
           <Card>
-            <Text style={styles.sectionTitle}>完走準備度スコア内訳</Text>
-            <Text style={styles.body}>練習量と登録済み大会プランを比較した参考値です。完走や健康状態を保証するものではありません。</Text>
+            <Text style={styles.sectionTitle}>練習状況チェックの理由</Text>
+            <Text style={styles.body}>合計 {trainingScore.total}点 / {trainingScore.label}</Text>
+            <Text style={styles.helpText}>大会距離に対して、最近の練習量・長めの練習・練習回数・目標ペースとの差・関門余裕を見ています。</Text>
             <View style={styles.grid2}>
-              <Metric label="直近30日走行距離" value={`${trainingScore.details.last30Distance}点`} />
-              <Metric label="直近90日走行距離" value={`${trainingScore.details.last90Distance}点`} />
-              <Metric label="最長走行距離" value={`${trainingScore.details.longestDistance}点`} />
-              <Metric label="練習回数" value={`${trainingScore.details.trainingCount}点`} />
-              <Metric label="目標ペースとの差" value={`${trainingScore.details.paceDiff}点`} />
-              <Metric label="関門余裕" value={`${trainingScore.details.gateMargin}点`} />
+              <Metric label="30日走行距離" value={`${formatKm(trainingSummary.last30DistanceKm)}km / ${trainingScore.details.last30Distance}点`} />
+              <Metric label="90日走行距離" value={`${formatKm(trainingSummary.last90DistanceKm)}km / ${trainingScore.details.last90Distance}点`} />
+              <Metric label="長めの練習" value={`${formatKm(trainingSummary.last90LongestDistanceKm)}km / ${trainingScore.details.longestDistance}点`} />
+              <Metric label="練習回数" value={`${trainingSummary.last30Count}回 / ${trainingScore.details.trainingCount}点`} />
+              <Metric label="目標ペース差" value={`${paceDifferenceLabel(trainingPaceDiff)} / ${trainingScore.details.paceDiff}点`} />
+              <Metric label="関門余裕" value={`${formatMinutesLabel(minMargin)} / ${trainingScore.details.gateMargin}点`} />
             </View>
-            <Text style={styles.sectionTitle}>改善ヒント</Text>
+            <View style={styles.explainBox}>
+              <Text style={styles.explainTitle}>判定の目安</Text>
+              <Text style={styles.body}>80点以上: 順調 / 60点以上: あと少し確認 / 40点以上: もう少し準備したい / 39点以下: 練習データが少なめです</Text>
+            </View>
+            <Text style={styles.sectionTitle}>次に見るポイント</Text>
             {trainingScore.suggestions.length ? trainingScore.suggestions.map((suggestion) => <Text key={suggestion} style={styles.body}>・{suggestion}</Text>) : <Text style={styles.muted}>現在のデータでは大きな注意点はありません。</Text>}
           </Card>
         )}
@@ -1801,9 +1812,9 @@ export default function App() {
           <Metric label="最小関門余裕" value={formatMinutesLabel(minMargin)} />
         </View>
         <View style={styles.judgementBox}>
-          <Text style={styles.homeMetricLabel}>完走準備度スコア</Text>
+          <Text style={styles.homeMetricLabel}>練習状況チェック</Text>
           <Text style={styles.judgementText}>{trainingScore.total}点 / {trainingScore.label}</Text>
-          <Text style={styles.helpText}>練習全体の平均ペースと大会ペースを比較した参考値です。ゆっくり走る練習も含まれます。</Text>
+          <Text style={styles.helpText}>最近の練習量、長めの練習、目標ペースとの差、関門余裕を比べた参考値です。ゆっくり走る練習も含まれます。</Text>
         </View>
       </Card>
     );
@@ -2393,6 +2404,7 @@ export default function App() {
   }
 
   function renderPlanTab() {
+    const activePlanSection = planSection === "過去比較" ? "出力" : planSection;
     const normalizedPlanPaceType = normalizedPaceType(planForm.paceType);
     const detailedPaceValue =
       normalizedPlanPaceType === "後半温存型"
@@ -2402,9 +2414,9 @@ export default function App() {
           : "一定ペース";
     return (
       <>
-        <Segment value={planSection} values={["作成", "ペース表", "出力", "過去比較"]} onChange={setPlanSection} />
-        {renderSelectedRaceContext(planSection === "作成" ? "プラン対象大会" : `${planSection}の対象大会`)}
-        {planSection === "作成" && (
+        <Segment value={activePlanSection} values={["作成", "ペース表", "出力"]} onChange={setPlanSection} />
+        {renderSelectedRaceContext(activePlanSection === "作成" ? "プラン対象大会" : `${activePlanSection}の対象大会`)}
+        {activePlanSection === "作成" && (
           <Card>
             <View style={styles.explainBox}>
               <Text style={styles.explainTitle}>計算の考え方</Text>
@@ -2498,8 +2510,8 @@ export default function App() {
             {!!planSavedMessage && <Text style={styles.savedText}>{planSavedMessage}</Text>}
           </Card>
         )}
-        {planSection === "ペース表" && renderPaceTable()}
-        {planSection === "出力" && (
+        {activePlanSection === "ペース表" && renderPaceTable()}
+        {activePlanSection === "出力" && (
           <Card>
             <Text style={styles.sectionTitle}>出力</Text>
             <Text style={styles.body}>現在のペース表をCSVまたはA4縦PDFで出力します。CSVはUTF-8 BOM付きです。</Text>
@@ -2511,15 +2523,6 @@ export default function App() {
               <SecondaryButton label="PDF出力" onPress={exportPdf} />
             </View>
           </Card>
-        )}
-        {planSection === "過去比較" && (
-          <>
-            <Card>
-              <Text style={styles.sectionTitle}>過去比較の役割</Text>
-              <Text style={styles.body}>過去比較は完走計画そのものではなく、前回大会や自己ベストとの差を確認する補助機能です。不要なら入力しなくてもペース表作成には影響しません。</Text>
-            </Card>
-            {renderPastRace()}
-          </>
         )}
       </>
     );
@@ -2688,7 +2691,14 @@ export default function App() {
             ))}
           </>
         ) : (
-          renderPastRace()
+          <>
+            <Card>
+              <Text style={styles.sectionTitle}>過去大会記録の役割</Text>
+              <Text style={styles.body}>過去大会記録は、前回大会やPBとの差を確認するための補助機能です。ペース表や関門計算には直接反映されません。</Text>
+              <Text style={styles.helpText}>同じ大会の過去記録、気温、天候を残しておくと、今回の目標タイムを決める参考になります。</Text>
+            </Card>
+            {renderPastRace()}
+          </>
         )}
       </>
     );
