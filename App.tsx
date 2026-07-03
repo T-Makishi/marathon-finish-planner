@@ -248,8 +248,18 @@ const SPLIT_DIFF_OPTIONS = ["0", "5", "10", "15", "20", "custom"];
 
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const n = (value: string, fallback = 0) => {
-  const parsed = Number(String(value).replace(",", "."));
+  const normalized = String(value).replace(",", ".").trim();
+  const direct = Number(normalized);
+  if (Number.isFinite(direct)) return direct;
+  const match = normalized.match(/-?\d+(?:\.\d+)?/);
+  const parsed = match ? Number(match[0]) : Number.NaN;
   return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const distanceLabel = (value: string | number) => {
+  const km = typeof value === "number" ? value : n(value, Number.NaN);
+  if (!Number.isFinite(km)) return String(value).replace(/km$/i, "");
+  return km.toFixed(km % 1 ? 3 : 0).replace(/\.?0+$/, "");
 };
 
 function parseDuration(value: string): number | null {
@@ -720,9 +730,9 @@ function buildPaceRows(race?: Race, plan?: Plan, gates: Gate[] = [], segments: E
       baseLapSec,
       adjustedLapSec,
       terrainAdjustmentSec: seed.manualSec == null ? seed.terrainSec : 0,
-      terrainMemo: seed.terrainSegment ? `${seed.terrainSegment.startKm}-${seed.terrainSegment.endKm}km ${seed.terrainSegment.terrain} ${Number(seed.terrainSegment.adjustSecPerKm) > 0 ? "+" : ""}${seed.terrainSegment.adjustSecPerKm}秒/km${seed.terrainSegment.memo ? ` ${seed.terrainSegment.memo}` : ""}` : "",
+      terrainMemo: seed.terrainSegment ? `${distanceLabel(seed.terrainSegment.startKm)}-${distanceLabel(seed.terrainSegment.endKm)}km ${seed.terrainSegment.terrain} ${Number(seed.terrainSegment.adjustSecPerKm) > 0 ? "+" : ""}${seed.terrainSegment.adjustSecPerKm}秒/km${seed.terrainSegment.memo ? ` ${seed.terrainSegment.memo}` : ""}` : "",
       stopSec,
-      stopMemo: seed.segmentStops.map((stop) => `${stop.distanceKm}km ${stop.memo || "停止"} +${stop.stopSec}秒`).join(" / "),
+      stopMemo: seed.segmentStops.map((stop) => `${distanceLabel(stop.distanceKm)}km ${stop.memo || "停止"} +${stop.stopSec}秒`).join(" / "),
       cumulativeSec,
       etaMinutes,
       gate,
@@ -1156,6 +1166,11 @@ export default function App() {
     setManualForm(emptyManualLap);
   }
 
+  function prepareManualLap(row: PaceRow) {
+    setManualForm(row.manual ?? { ...emptyManualLap, raceId: selectedRaceId, km: distanceLabel(row.km), lapTime: formatDuration(row.adjustedLapSec).slice(3) });
+    Alert.alert("ラップ調整", "上の「一部だけ手入力で調整」に、この距離とラップを入れました。必要に応じてラップを変更して保存してください。");
+  }
+
   function savePlan() {
     if (!selectedRaceId) return Alert.alert("大会未選択", "先に大会を登録してください。");
     if ((planForm.inputMode ?? "制限時間内で完走") === "目標ゴールタイムを狙う" && !parseDuration(planForm.targetTime)) return Alert.alert("入力不足", "目標ゴールタイムを 05:30:00 の形式で入力してください。");
@@ -1378,7 +1393,7 @@ export default function App() {
       `${selectedRace?.lostTimeMin ?? "0"}分`,
       getRealStartTime(selectedRace),
       goalTimeLabel,
-      row.gate?.distanceKm ?? row.km,
+      `${distanceLabel(row.gate?.distanceKm ?? row.km)}km`,
       formatDuration(row.adjustedLapSec),
       row.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes),
       row.gate?.gateTime ?? "",
@@ -1415,7 +1430,7 @@ export default function App() {
             : escapeHtml(row.terrainMemo);
           const stopText = row.stopSec ? `+${row.stopSec}秒<br>${escapeHtml(row.stopMemo)}` : "";
           const memoText = [row.gate?.name, row.gate?.memo, row.manual ? "手動調整" : ""].filter(Boolean).map(escapeHtml).join("<br>");
-          return `<tr><td>${escapeHtml(row.gate?.distanceKm ?? row.km)}</td><td>${escapeHtml(formatDuration(row.adjustedLapSec))}</td><td>${escapeHtml(row.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes))}</td><td>${escapeHtml(row.gate?.gateTime ?? "")}</td><td>${escapeHtml(formatMinutesLabel(row.gateMarginSec))}</td><td>${terrainText}</td><td>${stopText}</td><td>${memoText}</td></tr>`;
+          return `<tr><td>${escapeHtml(`${distanceLabel(row.gate?.distanceKm ?? row.km)}km`)}</td><td>${escapeHtml(formatDuration(row.adjustedLapSec))}</td><td>${escapeHtml(row.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes))}</td><td>${escapeHtml(row.gate?.gateTime ?? "")}</td><td>${escapeHtml(formatMinutesLabel(row.gateMarginSec))}</td><td>${terrainText}</td><td>${stopText}</td><td>${memoText}</td></tr>`;
         }
       )
       .join("");
@@ -1665,7 +1680,7 @@ export default function App() {
             gateRows.map((row) => (
               <View key={row.gate?.id} style={styles.gateSummary}>
                 <View style={styles.gateSummaryText}>
-                  <Text style={styles.listTitle}>{row.gate?.name} / {row.gate?.distanceKm ?? row.km.toFixed(row.km % 1 ? 3 : 0)}km</Text>
+                  <Text style={styles.listTitle}>{row.gate?.name} / {distanceLabel(row.gate?.distanceKm ?? row.km)}km</Text>
                   <Text style={styles.muted}>通過予定 {row.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes)} / 関門 {row.gate?.gateTime}</Text>
                 </View>
                 <View style={styles.gateSummaryBadge}>
@@ -2230,7 +2245,7 @@ export default function App() {
       <View style={styles.contextCard}>
         <Text style={styles.contextLabel}>{label}</Text>
         <Text style={styles.contextTitle}>{selectedRace.name}</Text>
-        <Text style={styles.contextMeta}>{selectedRace.date || "日付未設定"} / {combineLocation(selectedRace.prefecture, selectedRace.municipality, selectedRace.location) || "開催地未設定"} / {selectedRace.distanceKm || "-"}km</Text>
+                <Text style={styles.contextMeta}>{selectedRace.date || "日付未設定"} / {combineLocation(selectedRace.prefecture, selectedRace.municipality, selectedRace.location) || "開催地未設定"} / {selectedRace.distanceKm ? `${distanceLabel(selectedRace.distanceKm)}km` : "-"}</Text>
         <Text style={styles.contextMeta}>開始 {selectedRace.startTime || "-"} / ロスタイム {selectedRace.lostTimeMin ?? "0"}分 / 制限ゴール {getLimitGoalTime(selectedRace)}</Text>
       </View>
     );
@@ -2323,7 +2338,7 @@ export default function App() {
                     {race.id === selectedRaceId && <Text style={styles.usingBadge}>使用中</Text>}
                     {raceForm.id === race.id && <Text style={styles.editingBadge}>編集中</Text>}
                   </View>
-                  <Text style={styles.muted}>{race.date} / {combineLocation(race.prefecture, race.municipality, race.location)} / {race.distanceKm}km</Text>
+                  <Text style={styles.muted}>{race.date} / {combineLocation(race.prefecture, race.municipality, race.location)} / {distanceLabel(race.distanceKm)}km</Text>
                   <Text style={styles.muted}>開始 {race.startTime} / ロスタイム {race.lostTimeMin ?? "0"}分 / 制限ゴール {getLimitGoalTime(race)}</Text>
                   <View style={styles.buttonRow}>
                     <SecondaryButton label="この大会を使う" onPress={() => selectRace(race.id)} />
@@ -2350,7 +2365,7 @@ export default function App() {
               return (
                 <ListCard
                   key={gate.id}
-                  title={`${gate.name} ${gate.distanceKm}km`}
+                  title={`${gate.name} ${distanceLabel(gate.distanceKm)}km`}
                   subtitle={`関門 ${gate.gateTime} / 余裕 ${formatDuration(row?.gateMarginSec)} / ${statusFromMargin(row?.gateMarginSec)}`}
                   onEdit={() => setGateForm(gate)}
                   onDelete={() => updateStore({ ...store, gates: store.gates.filter((item) => item.id !== gate.id) })}
@@ -2380,7 +2395,7 @@ export default function App() {
               <PrimaryButton label={segmentForm.id ? "更新する" : "保存する"} onPress={saveSegment} />
             </Card>
             {raceSegments.map((segment) => (
-              <ListCard key={segment.id} title={`${segment.startKm}km - ${segment.endKm}km / ${segment.terrain}`} subtitle={[`${segment.adjustSecPerKm}秒/km`, segment.memo].filter(Boolean).join(" / ")} onEdit={() => setSegmentForm(segment)} onDelete={() => updateStore({ ...store, segments: store.segments.filter((item) => item.id !== segment.id) })} />
+              <ListCard key={segment.id} title={`${distanceLabel(segment.startKm)}km - ${distanceLabel(segment.endKm)}km / ${segment.terrain}`} subtitle={[`${segment.adjustSecPerKm}秒/km`, segment.memo].filter(Boolean).join(" / ")} onEdit={() => setSegmentForm(segment)} onDelete={() => updateStore({ ...store, segments: store.segments.filter((item) => item.id !== segment.id) })} />
             ))}
           </>
         )}
@@ -2395,7 +2410,7 @@ export default function App() {
               <PrimaryButton label={stopForm.id ? "更新する" : "保存する"} onPress={saveStop} />
             </Card>
             {raceStops.sort((a, b) => n(a.distanceKm) - n(b.distanceKm)).map((stop) => (
-              <ListCard key={stop.id} title={`${stop.distanceKm}km / ${stop.memo || "停止"}`} subtitle={`+${stop.stopSec}秒`} onEdit={() => setStopForm(stop)} onDelete={() => updateStore({ ...store, stops: store.stops.filter((item) => item.id !== stop.id) })} />
+              <ListCard key={stop.id} title={`${distanceLabel(stop.distanceKm)}km / ${stop.memo || "停止"}`} subtitle={`+${stop.stopSec}秒`} onEdit={() => setStopForm(stop)} onDelete={() => updateStore({ ...store, stops: store.stops.filter((item) => item.id !== stop.id) })} />
             ))}
           </>
         )}
@@ -2542,7 +2557,21 @@ export default function App() {
         <Card>
           <Text style={styles.sectionTitle}>ペース表</Text>
           <Text style={styles.body}>{selectedRace?.name ?? "大会未選択"} / 予測ゴール {formatDurationJa(predictedOfficialGoalSec)} / 平均 {formatPace(basePace)} / 関門余裕 最小{formatMinutesLabel(minMargin)}</Text>
-          <Text style={styles.helpText}>基本は5kmごとの目安を確認します。1kmごとの詳細や手動調整は、設定で「詳細機能を表示」をオンにすると使えます。</Text>
+          <Text style={styles.helpText}>給水Pはその地点を含む次の1km行に反映されます。例: 6.2kmの給水は7km行の通過予定に加算されます。</Text>
+          <Text style={styles.helpText}>1kmごとの詳細や手動調整は、設定で「詳細機能を表示」をオンにすると使えます。</Text>
+        </Card>
+        <Card>
+          <Text style={styles.sectionTitle}>反映している登録データ</Text>
+          <View style={styles.grid2}>
+            <Metric label="高低差補正" value={`${raceSegments.length}件`} />
+            <Metric label="給水/停止" value={`${raceStops.length}件`} />
+          </View>
+          {raceSegments.length ? raceSegments.slice(0, 3).map((segment) => (
+            <Text key={`pace-segment-${segment.id}`} style={styles.helpText}>高低差: {distanceLabel(segment.startKm)}-{distanceLabel(segment.endKm)}km / {segment.terrain} / {Number(segment.adjustSecPerKm) > 0 ? "+" : ""}{segment.adjustSecPerKm}秒/km{segment.memo ? ` / ${segment.memo}` : ""}</Text>
+          )) : <Text style={styles.muted}>高低差補正は未登録です。</Text>}
+          {raceStops.length ? raceStops.slice(0, 5).map((stop) => (
+            <Text key={`pace-stop-${stop.id}`} style={styles.helpText}>給水/停止: {distanceLabel(stop.distanceKm)}km / +{stop.stopSec}秒 / {stop.memo || "停止"}</Text>
+          )) : <Text style={styles.muted}>給水/停止は未登録です。</Text>}
         </Card>
         <Card>
           <Text style={styles.sectionTitle}>5km区間ペース提案（試算）</Text>
@@ -2588,7 +2617,7 @@ export default function App() {
             {gateRows.map((row) => (
               <View key={`gate-only-${row.gate?.id}`} style={styles.gateSummary}>
                 <View style={styles.gateSummaryText}>
-                  <Text style={styles.listTitle}>{row.gate?.name} / {row.gate?.distanceKm ?? row.km}km</Text>
+                  <Text style={styles.listTitle}>{row.gate?.name} / {distanceLabel(row.gate?.distanceKm ?? row.km)}km</Text>
                   <Text style={styles.muted}>関門 {row.gate?.gateTime} / 通過予定 {row.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes)}</Text>
                 </View>
                 <View style={styles.gateSummaryBadge}>
@@ -2617,7 +2646,7 @@ export default function App() {
             {paceRows.map((row) => (
               <View key={`${row.km}`} style={styles.paceCard}>
                 <View style={styles.paceHead}>
-                  <Text style={styles.kmText}>{row.gate?.distanceKm ?? row.km.toFixed(row.km % 1 ? 3 : 0)} km</Text>
+                  <Text style={styles.kmText}>{distanceLabel(row.gate?.distanceKm ?? row.km)} km</Text>
                   <View style={styles.badgeRow}>
                     {row.manual && <Text style={styles.manualBadge}>手動調整</Text>}
                     {row.gate ? <Badge label={row.status} /> : <Text style={styles.muted}>通過</Text>}
@@ -2639,7 +2668,7 @@ export default function App() {
                   </View>
                 )}
                 <View style={styles.buttonRow}>
-                  <SecondaryButton label="このラップを調整" onPress={() => setManualForm(row.manual ?? { ...emptyManualLap, raceId: selectedRaceId, km: String(row.km), lapTime: formatDuration(row.adjustedLapSec).slice(3) })} />
+                  <SecondaryButton label="このラップを調整" onPress={() => prepareManualLap(row)} />
                   {row.manual && <DangerButton label="調整を解除" onPress={() => updateStore({ ...store, manualLaps: store.manualLaps.filter((manual) => manual.id !== row.manual?.id) })} />}
                 </View>
               </View>
