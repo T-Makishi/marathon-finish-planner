@@ -88,6 +88,7 @@ type ElevationSegment = {
   endKm: string;
   terrain: "上り" | "下り" | "平坦";
   adjustSecPerKm: string;
+  memo?: string;
 };
 
 type Plan = {
@@ -177,6 +178,8 @@ type PaceRow = {
   km: number;
   baseLapSec: number;
   adjustedLapSec: number;
+  terrainAdjustmentSec: number;
+  terrainMemo?: string;
   stopSec: number;
   stopMemo?: string;
   cumulativeSec: number;
@@ -210,7 +213,7 @@ const emptyRace: Race = {
   memo: ""
 };
 const emptyGate: Gate = { id: "", raceId: "", name: "", distanceKm: "", gateTime: "", memo: "" };
-const emptySegment: ElevationSegment = { id: "", raceId: "", startKm: "", endKm: "", terrain: "上り", adjustSecPerKm: "10" };
+const emptySegment: ElevationSegment = { id: "", raceId: "", startKm: "", endKm: "", terrain: "上り", adjustSecPerKm: "10", memo: "" };
 const emptyPlan: Plan = { id: "", raceId: "", inputMode: "制限時間内で完走", targetTime: "05:30:00", pbTargetOffsetMin: "3", paceType: "安全完走型", splitStrategy: "even", splitDifferenceMin: "0", customSplitDifferenceMin: "", gateBufferMin: "10" };
 const emptyStop: StopPoint = { id: "", raceId: "", distanceKm: "", stopSec: "30", memo: "" };
 const emptyManualLap: ManualLap = { id: "", raceId: "", km: "", lapTime: "" };
@@ -500,6 +503,15 @@ function escapeCsv(value: string | number | undefined) {
   return `"${raw.replace(/"/g, '""')}"`;
 }
 
+function escapeHtml(value: string | number | undefined | null) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function sanitizeStore(raw: Partial<Store>): Store {
   const initial = createInitialStore();
   const races = (raw.races ?? initial.races).map((race) => ({ ...race, lostTimeMin: race.lostTimeMin ?? "0", lastUsedAt: race.lastUsedAt ?? 0 }));
@@ -517,7 +529,7 @@ function sanitizeStore(raw: Partial<Store>): Store {
     ...raw,
     races,
     gates: raw.gates ?? [],
-    segments: raw.segments ?? [],
+    segments: (raw.segments ?? []).map((segment) => ({ ...segment, memo: segment.memo ?? "" })),
     stops: raw.stops ?? [],
     manualLaps: raw.manualLaps ?? [],
     plans,
@@ -549,6 +561,10 @@ function sanitizeAdjustValue(value: string | undefined, fallback: string) {
 function getTerrainAdjustment(km: number, segments: ElevationSegment[]) {
   const hit = segments.find((segment) => km > n(segment.startKm) && km <= n(segment.endKm));
   return hit ? n(hit.adjustSecPerKm) : 0;
+}
+
+function getTerrainSegment(km: number, segments: ElevationSegment[]) {
+  return segments.find((segment) => km > n(segment.startKm) && km <= n(segment.endKm));
 }
 
 function normalizedPaceType(type: Plan["paceType"]) {
@@ -670,6 +686,7 @@ function buildPaceRows(race?: Race, plan?: Plan, gates: Gate[] = [], segments: E
     const previousKm = Math.max(0, Math.min(kmPoint - 1, distance));
     const segmentDistance = kmPoint > wholeKms ? distance - wholeKms : 1;
     const weight = segmentDistance * paceFactor(plan.paceType, actualKm, distance);
+    const terrainSegment = getTerrainSegment(actualKm, segments);
     const terrainSec = getTerrainAdjustment(actualKm, segments) * segmentDistance;
     const manual = manualByKm.get(Math.round(actualKm * 1000) / 1000);
     const manualSec = manual ? parsePace(manual.lapTime) : null;
@@ -677,7 +694,7 @@ function buildPaceRows(race?: Race, plan?: Plan, gates: Gate[] = [], segments: E
       const stopKm = n(stop.distanceKm);
       return stopKm > previousKm && stopKm <= actualKm;
     });
-    return { actualKm, segmentDistance, weight, terrainSec, manual, manualSec, segmentStops };
+    return { actualKm, segmentDistance, weight, terrainSec, terrainSegment, manual, manualSec, segmentStops };
   });
   const manualTotalSec = rowSeeds.reduce((sum, seed) => sum + (seed.manualSec ?? 0), 0);
   const autoWeight = rowSeeds.reduce((sum, seed) => sum + (seed.manualSec == null ? seed.weight : 0), 0);
@@ -702,6 +719,8 @@ function buildPaceRows(race?: Race, plan?: Plan, gates: Gate[] = [], segments: E
       km: actualKm,
       baseLapSec,
       adjustedLapSec,
+      terrainAdjustmentSec: seed.manualSec == null ? seed.terrainSec : 0,
+      terrainMemo: seed.terrainSegment ? `${seed.terrainSegment.startKm}-${seed.terrainSegment.endKm}km ${seed.terrainSegment.terrain} ${Number(seed.terrainSegment.adjustSecPerKm) > 0 ? "+" : ""}${seed.terrainSegment.adjustSecPerKm}秒/km${seed.terrainSegment.memo ? ` ${seed.terrainSegment.memo}` : ""}` : "",
       stopSec,
       stopMemo: seed.segmentStops.map((stop) => `${stop.distanceKm}km ${stop.memo || "停止"} +${stop.stopSec}秒`).join(" / "),
       cumulativeSec,
@@ -1323,8 +1342,15 @@ export default function App() {
     const fiveKmRows = Array.from({ length: Math.floor(distance / 5) }, (_, index) => (index + 1) * 5)
       .map((km) => paceRows.find((row) => Math.abs(row.km - km) < 0.01))
       .filter(Boolean) as PaceRow[];
+    const terrainBoundaryRows = paceRows.filter((row) =>
+      raceSegments.some((segment) => {
+        const segmentEndRowKm = Math.min(distance, Math.ceil(n(segment.endKm)));
+        return Math.abs(row.km - segmentEndRowKm) < 0.01;
+      })
+    );
     const importantRows = paceRows.filter((row) => row.gate || row.stopSec > 0 || Math.abs(row.km - distance) < 0.01);
     return [...fiveKmRows, ...importantRows]
+      .concat(terrainBoundaryRows)
       .filter((row, index, rows) => rows.findIndex((item) => Math.abs(item.km - row.km) < 0.01 && item.gate?.id === row.gate?.id) === index)
       .sort((a, b) => a.km - b.km);
   }
@@ -1344,7 +1370,7 @@ export default function App() {
   }
 
   async function exportCsv() {
-    const header = ["大会名", "スタート時刻", "ロスタイム", "実走開始時刻", "目標ゴールタイム", "距離", "予定ラップ", "通過予定", "関門時刻", "関門余裕", "給水/停止", "メモ"];
+    const header = ["大会名", "スタート時刻", "ロスタイム", "実走開始時刻", "目標ゴールタイム", "距離", "予定ラップ", "通過予定", "関門時刻", "関門余裕", "高低差補正", "給水/停止", "メモ"];
     const exportRows = getExportPaceRows();
     const lines = exportRows.map((row) => [
       selectedRace?.name ?? "",
@@ -1357,8 +1383,9 @@ export default function App() {
       row.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes),
       row.gate?.gateTime ?? "",
       formatMinutesLabel(row.gateMarginSec),
+      row.terrainAdjustmentSec ? `${row.terrainAdjustmentSec > 0 ? "+" : ""}${Math.round(row.terrainAdjustmentSec)}秒 ${row.terrainMemo ?? ""}` : row.terrainMemo ?? "",
       row.stopSec ? `+${row.stopSec}秒 ${row.stopMemo ?? ""}` : "",
-      [row.gate?.name, row.gate?.memo, row.manual ? "手動調整" : ""].filter(Boolean).join(" / ")
+      [row.gate?.name, row.gate?.memo, row.terrainMemo, row.stopMemo, row.manual ? "手動調整" : ""].filter(Boolean).join(" / ")
     ]);
     const csv = "\uFEFF" + [header, ...lines].map((line) => line.map(escapeCsv).join(",")).join("\n");
     const safeName = (selectedRace?.name || "race-plan").replace(/[\\/:*?"<>|]/g, "_");
@@ -1382,11 +1409,17 @@ export default function App() {
     const exportRows = getExportPaceRows();
     const rows = exportRows
       .map(
-        (row) =>
-          `<tr><td>${row.gate?.distanceKm ?? row.km}</td><td>${formatDuration(row.adjustedLapSec)}</td><td>${row.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes)}</td><td>${row.gate?.gateTime ?? ""}</td><td>${formatMinutesLabel(row.gateMarginSec)}</td><td>${row.stopSec ? `+${row.stopSec}秒` : ""}</td><td>${[row.gate?.name, row.gate?.memo, row.stopMemo, row.manual ? "手動調整" : ""].filter(Boolean).join("<br>")}</td></tr>`
+        (row) => {
+          const terrainText = row.terrainAdjustmentSec
+            ? `${row.terrainAdjustmentSec > 0 ? "+" : ""}${Math.round(row.terrainAdjustmentSec)}秒<br>${escapeHtml(row.terrainMemo)}`
+            : escapeHtml(row.terrainMemo);
+          const stopText = row.stopSec ? `+${row.stopSec}秒<br>${escapeHtml(row.stopMemo)}` : "";
+          const memoText = [row.gate?.name, row.gate?.memo, row.terrainMemo, row.stopMemo, row.manual ? "手動調整" : ""].filter(Boolean).map(escapeHtml).join("<br>");
+          return `<tr><td>${escapeHtml(row.gate?.distanceKm ?? row.km)}</td><td>${escapeHtml(formatDuration(row.adjustedLapSec))}</td><td>${escapeHtml(row.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes))}</td><td>${escapeHtml(row.gate?.gateTime ?? "")}</td><td>${escapeHtml(formatMinutesLabel(row.gateMarginSec))}</td><td>${terrainText}</td><td>${stopText}</td><td>${memoText}</td></tr>`;
+        }
       )
       .join("");
-    const html = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 portrait;margin:12mm}body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#263238}h1{font-size:18px;margin:0 0 8px}.summary{margin:8px 0 12px;padding:8px;background:#f6f3ee;font-size:11px}table{width:100%;border-collapse:collapse;font-size:9px}th,td{border:1px solid #ccd6d0;padding:4px;text-align:left;vertical-align:top}th{background:#e9f1eb}@media print{body{margin:0}.summary{break-inside:avoid}tr{break-inside:avoid}}</style></head><body><h1>RUN Finish Planner</h1><div class="summary"><b>${selectedRace?.name ?? ""}</b><br>出力範囲 ${paceExportMode} / スタート ${selectedRace?.startTime ?? "-"} / ロスタイム ${selectedRace?.lostTimeMin ?? "0"}分 / 実走開始 ${getRealStartTime(selectedRace)} / 目標 ${goalTimeLabel} / 予測ゴール ${formatDurationJa(predictedOfficialGoalSec)} / 関門余裕 最小${formatMinutesLabel(minMargin)}</div><table><thead><tr><th>距離</th><th>予定ラップ</th><th>通過予定</th><th>関門時刻</th><th>関門余裕</th><th>給水/停止</th><th>メモ</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 portrait;margin:12mm}body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#263238}h1{font-size:18px;margin:0 0 8px}.summary{margin:8px 0 12px;padding:8px;background:#f6f3ee;font-size:11px}table{width:100%;border-collapse:collapse;font-size:8.5px}th,td{border:1px solid #ccd6d0;padding:4px;text-align:left;vertical-align:top}th{background:#e9f1eb}@media print{body{margin:0}.summary{break-inside:avoid}tr{break-inside:avoid}}</style></head><body><h1>RUN Finish Planner</h1><div class="summary"><b>${escapeHtml(selectedRace?.name ?? "")}</b><br>出力範囲 ${escapeHtml(paceExportMode)} / スタート ${escapeHtml(selectedRace?.startTime ?? "-")} / ロスタイム ${escapeHtml(selectedRace?.lostTimeMin ?? "0")}分 / 実走開始 ${escapeHtml(getRealStartTime(selectedRace))} / 目標 ${escapeHtml(goalTimeLabel)} / 予測ゴール ${escapeHtml(formatDurationJa(predictedOfficialGoalSec))} / 関門余裕 最小${escapeHtml(formatMinutesLabel(minMargin))}</div><table><thead><tr><th>距離</th><th>予定ラップ</th><th>通過予定</th><th>関門時刻</th><th>関門余裕</th><th>高低差</th><th>給水/停止</th><th>メモ</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
     if (Platform.OS === "web") {
       const web = globalThis as any;
       const win = web.open("", "_blank");
@@ -2332,10 +2365,11 @@ export default function App() {
                 setActivePicker={setActivePicker}
                 onSelect={(value) => setField(setSegmentForm, "adjustSecPerKm", value)}
               />
+              <Input label="メモ" value={segmentForm.memo ?? ""} onChangeText={(v) => setField(setSegmentForm, "memo", v)} placeholder="例: 前半上り、橋の前後、終盤注意など" />
               <PrimaryButton label={segmentForm.id ? "更新する" : "保存する"} onPress={saveSegment} />
             </Card>
             {raceSegments.map((segment) => (
-              <ListCard key={segment.id} title={`${segment.startKm}km - ${segment.endKm}km / ${segment.terrain}`} subtitle={`${segment.adjustSecPerKm}秒/km`} onEdit={() => setSegmentForm(segment)} onDelete={() => updateStore({ ...store, segments: store.segments.filter((item) => item.id !== segment.id) })} />
+              <ListCard key={segment.id} title={`${segment.startKm}km - ${segment.endKm}km / ${segment.terrain}`} subtitle={[`${segment.adjustSecPerKm}秒/km`, segment.memo].filter(Boolean).join(" / ")} onEdit={() => setSegmentForm(segment)} onDelete={() => updateStore({ ...store, segments: store.segments.filter((item) => item.id !== segment.id) })} />
             ))}
           </>
         )}
@@ -2589,8 +2623,9 @@ export default function App() {
                 <View style={styles.grid2}>
                   <Metric label="予定ラップ" value={formatDuration(row.adjustedLapSec)} />
                   <Metric label="通過予定" value={row.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes)} />
+                  <Metric label="高低差補正" value={row.terrainAdjustmentSec ? `${row.terrainAdjustmentSec > 0 ? "+" : ""}${Math.round(row.terrainAdjustmentSec)}秒` : "-"} />
                   <Metric label="給水/停止" value={row.stopSec ? `+${row.stopSec}秒` : "-"} />
-                  <Metric label="メモ" value={row.stopMemo || row.gate?.memo || "-"} />
+                  <Metric label="メモ" value={row.stopMemo || row.terrainMemo || row.gate?.memo || "-"} />
                 </View>
                 {row.gate && (
                   <View style={styles.gateDetail}>
