@@ -78,6 +78,8 @@ export type OfficialRaceData = {
   sections: RaceDataSection[];
   waterStations?: RaceDataWaterStation[];
   supportPoints?: RaceDataSupportPoint[];
+  checkpointImportance?: "normal" | "high";
+  showCheckpointsForPerformanceMode?: boolean;
   sources: RaceDataSource[];
   verificationStatus: RaceDataStatus;
   publicationAllowed?: boolean;

@@ -23,7 +23,7 @@ import {
 } from "react-native";
 import { JAPAN_MUNICIPALITIES } from "./data/japanMunicipalities";
 import { OFFICIAL_RACE_DATA, OfficialRaceData, RaceDataCategory, RaceDataDifficulty, RaceDataStatus } from "./src/data/raceData";
-import { calculateFiveKmPacePlan, CoursePaceStrategy } from "./src/services/coursePacePlanner";
+import { calculateFiveKmPacePlan, CoursePaceStrategy, RunPlanStyle, runStyleDescription, runStyleLabel, styleToSplitMinutes, styleToStrategy } from "./src/services/coursePacePlanner";
 import { pickCsvFile } from "./src/services/filePickerService";
 import {
   buildImportedActivities,
@@ -98,9 +98,12 @@ type Plan = {
   targetTime: string;
   pbTargetOffsetMin?: string;
   paceType: "安全完走型" | "一定ペース型" | "後半温存型" | "イーブンペース" | "前半抑えめ" | "後半型" | "関門安全重視";
+  runStyle?: RunPlanStyle;
   splitStrategy?: CoursePaceStrategy;
   splitDifferenceMin?: string;
   customSplitDifferenceMin?: string;
+  useElevationAdjustment?: boolean;
+  showCheckpointDetails?: boolean;
   gateBufferMin: string;
 };
 
@@ -214,7 +217,7 @@ const emptyRace: Race = {
 };
 const emptyGate: Gate = { id: "", raceId: "", name: "", distanceKm: "", gateTime: "", memo: "" };
 const emptySegment: ElevationSegment = { id: "", raceId: "", startKm: "", endKm: "", terrain: "上り", adjustSecPerKm: "10", memo: "" };
-const emptyPlan: Plan = { id: "", raceId: "", inputMode: "制限時間内で完走", targetTime: "05:30:00", pbTargetOffsetMin: "3", paceType: "安全完走型", splitStrategy: "even", splitDifferenceMin: "0", customSplitDifferenceMin: "", gateBufferMin: "10" };
+const emptyPlan: Plan = { id: "", raceId: "", inputMode: "制限時間内で完走", targetTime: "05:30:00", pbTargetOffsetMin: "3", paceType: "安全完走型", runStyle: "even", splitStrategy: "even", splitDifferenceMin: "0", customSplitDifferenceMin: "", useElevationAdjustment: false, showCheckpointDetails: false, gateBufferMin: "10" };
 const emptyStop: StopPoint = { id: "", raceId: "", distanceKm: "", stopSec: "30", memo: "" };
 const emptyManualLap: ManualLap = { id: "", raceId: "", km: "", lapTime: "" };
 const emptyPb: PBRecord = { id: "", event: "フル", raceName: "", date: "", time: "", memo: "" };
@@ -529,10 +532,13 @@ function sanitizeStore(raw: Partial<Store>): Store {
     ...plan,
     inputMode: (plan.inputMode as string) === "申告ペース" || (plan.inputMode as string) === "目標タイム" ? "目標ゴールタイムを狙う" : plan.inputMode ?? "制限時間内で完走",
     paceType: normalizedPaceType(plan.paceType ?? "安全完走型"),
+    runStyle: migrateRunStyle(plan),
     pbTargetOffsetMin: plan.pbTargetOffsetMin ?? "3",
-    splitStrategy: plan.splitStrategy ?? defaultStrategyForPaceType(plan.paceType ?? "安全完走型"),
-    splitDifferenceMin: plan.splitDifferenceMin ?? "0",
-    customSplitDifferenceMin: plan.customSplitDifferenceMin ?? ""
+    splitStrategy: plan.splitStrategy ?? styleToStrategy(migrateRunStyle(plan)),
+    splitDifferenceMin: plan.splitDifferenceMin ?? String(styleToSplitMinutes(migrateRunStyle(plan))),
+    customSplitDifferenceMin: plan.customSplitDifferenceMin ?? "",
+    useElevationAdjustment: Boolean(plan.useElevationAdjustment),
+    showCheckpointDetails: Boolean(plan.showCheckpointDetails)
   }));
   return {
     ...initial,
@@ -582,6 +588,22 @@ function normalizedPaceType(type: Plan["paceType"]) {
   if (type === "イーブンペース") return "一定ペース型";
   if (type === "前半抑えめ" || type === "後半型") return "後半温存型";
   return type;
+}
+
+function migrateRunStyle(plan: Partial<Plan>): RunPlanStyle {
+  if (plan.runStyle) return plan.runStyle;
+  const strategy = plan.splitStrategy ?? defaultStrategyForPaceType(plan.paceType ?? "安全完走型");
+  const diff = plan.splitDifferenceMin === "custom" ? n(plan.customSplitDifferenceMin ?? "0") : n(plan.splitDifferenceMin ?? "0");
+  const normalized = normalizedPaceType((plan.paceType ?? "安全完走型") as Plan["paceType"]);
+  if (normalized === "後半温存型" || strategy === "negative") return diff >= 10 ? "negative-10" : diff >= 5 ? "negative-5" : "negative-5";
+  if (normalized === "安全完走型" || strategy === "positive") return diff >= 10 ? "positive-10" : diff >= 5 ? "positive-5" : "positive-5";
+  return "even";
+}
+
+function runStyleToPaceType(value?: RunPlanStyle): Plan["paceType"] {
+  if (value === "negative-5" || value === "negative-10" || value === "course-adaptive") return "後半温存型";
+  if (value === "positive-5" || value === "positive-10") return "安全完走型";
+  return "一定ペース型";
 }
 
 function splitStrategyLabel(value: string) {
@@ -636,6 +658,13 @@ function sourceUsageStatusLabel(value?: string) {
   return "未設定";
 }
 
+function confidenceLabel(value?: string) {
+  if (value === "high") return "高";
+  if (value === "medium") return "中";
+  if (value === "low") return "低";
+  return "未確認";
+}
+
 function mccCategoryLabel(value?: string | null) {
   if (value === "MCC") return "MCC";
   if (value === "HMCC") return "HMCC";
@@ -658,7 +687,17 @@ function terrainLabel(value: string) {
   if (value === "rolling") return "起伏";
   if (value === "mixed") return "混在";
   if (value === "flat") return "平坦";
-  return "未確認";
+  return "データなし";
+}
+
+function userSegmentsToRaceSections(segments: ElevationSegment[]) {
+  return segments.map((segment) => ({
+    startKm: n(segment.startKm),
+    endKm: n(segment.endKm),
+    terrain: segment.terrain === "上り" ? "uphill" as const : segment.terrain === "下り" ? "downhill" as const : "flat" as const,
+    description: segment.memo || `${segment.terrain}区間`,
+    confidence: "high" as const
+  })).filter((section) => section.endKm > section.startKm);
 }
 
 function raceCategoryFromData(category: RaceDataCategory) {
@@ -895,16 +934,20 @@ export default function App() {
   }, [raceDataCategory, raceDataDifficulty, raceDataElevation, raceDataLimit, raceDataMcc, raceDataMonth, raceDataPrefecture, raceDataQuery, raceDataStatus]);
   const coursePaceRows = useMemo(() => {
     if (!selectedRace || !selectedPlan || !selectedTargetSec) return [];
+    const userSections = userSegmentsToRaceSections(raceSegments);
+    const planRunStyle = selectedPlan.runStyle ?? migrateRunStyle(selectedPlan);
     return calculateFiveKmPacePlan({
       distanceKm: n(selectedRace.distanceKm),
       targetSeconds: Math.max(60, selectedTargetSec - totalStopSec),
-      sections: selectedRaceData?.sections,
-      strategy: selectedPlan.splitStrategy ?? defaultStrategyForPaceType(selectedPlan.paceType),
+      sections: userSections.length ? userSections : selectedRaceData?.sections,
+      runStyle: planRunStyle,
+      strategy: selectedPlan.splitStrategy ?? styleToStrategy(planRunStyle),
       splitDifferenceMinutes: splitDiffMinutes(selectedPlan),
+      useElevationAdjustment: Boolean(selectedPlan.useElevationAdjustment || planRunStyle === "course-adaptive"),
       climbSecPerKm: n(store.settings.climbSec, 10),
       descentSecPerKm: n(store.settings.descentSec, -5)
     });
-  }, [selectedRace, selectedPlan, selectedTargetSec, selectedRaceData, totalStopSec, store.settings.climbSec, store.settings.descentSec]);
+  }, [selectedRace, selectedPlan, selectedTargetSec, selectedRaceData, raceSegments, totalStopSec, store.settings.climbSec, store.settings.descentSec]);
   const trainingSummary = useMemo(() => summarizeTraining(store.trainingActivities), [store.trainingActivities]);
   const trainingScore = useMemo(
     () =>
@@ -1175,7 +1218,17 @@ export default function App() {
     if (!selectedRaceId) return Alert.alert("大会未選択", "先に大会を登録してください。");
     if ((planForm.inputMode ?? "制限時間内で完走") === "目標ゴールタイムを狙う" && !parseDuration(planForm.targetTime)) return Alert.alert("入力不足", "目標ゴールタイムを 05:30:00 の形式で入力してください。");
     if (planForm.inputMode === "自己ベスト更新を狙う" && !getFullPbSeconds(store.pbs)) return Alert.alert("PB未登録", "PB画面でフルマラソンPBを登録してください。");
-    const nextPlan = { ...planForm, id: planForm.id || selectedPlan?.id || uid(), raceId: selectedRaceId };
+    const runStyle = planForm.runStyle ?? migrateRunStyle(planForm);
+    const nextPlan = {
+      ...planForm,
+      id: planForm.id || selectedPlan?.id || uid(),
+      raceId: selectedRaceId,
+      runStyle,
+      paceType: runStyleToPaceType(runStyle),
+      splitStrategy: planForm.splitStrategy ?? styleToStrategy(runStyle),
+      splitDifferenceMin: planForm.splitDifferenceMin ?? String(styleToSplitMinutes(runStyle)),
+      useElevationAdjustment: Boolean(planForm.useElevationAdjustment || runStyle === "course-adaptive")
+    };
     const exists = store.plans.some((plan) => plan.id === nextPlan.id);
     updateStore({ ...store, plans: exists ? store.plans.map((plan) => (plan.id === nextPlan.id ? nextPlan : plan)) : [...store.plans, nextPlan] });
     setPlanSavedMessage("保存しました。ホームとペース表に反映済みです。");
@@ -2028,7 +2081,7 @@ export default function App() {
                   {selectedDetail.sections.map((section) => (
                     <View key={`${section.startKm}-${section.endKm}`} style={styles.courseMiniCard}>
                       <Text style={styles.listTitle}>{section.startKm} - {section.endKm}km / {terrainLabel(section.terrain)}</Text>
-                      <Text style={styles.muted}>{section.description ?? "データなし"} / 上昇 {section.elevationGainM ?? "データなし"} / 下降 {section.elevationLossM ?? "データなし"} / 信頼度 {section.confidence ?? "unknown"}</Text>
+                      <Text style={styles.muted}>{section.description ?? "データなし"} / 上昇 {section.elevationGainM ?? "データなし"} / 下降 {section.elevationLossM ?? "データなし"} / 確認度 {confidenceLabel(section.confidence)}</Text>
                     </View>
                   ))}
                 </Card>
@@ -2037,13 +2090,13 @@ export default function App() {
                   {selectedDetail.waterStations?.length ? selectedDetail.waterStations.map((station) => (
                     <View key={`${station.distanceKm}-${station.name ?? "water"}`} style={styles.courseMiniCard}>
                       <Text style={styles.listTitle}>{station.distanceKm}km / 給水</Text>
-                      <Text style={styles.muted}>{station.name ?? "地点名未登録"} / 信頼度 {station.confidence ?? "unknown"}</Text>
+                      <Text style={styles.muted}>{station.name ?? "地点名未登録"} / 確認度 {confidenceLabel(station.confidence)}</Text>
                     </View>
                   )) : null}
                   {selectedDetail.supportPoints?.length ? selectedDetail.supportPoints.map((point) => (
                     <View key={`${point.type}-${point.distanceKm}-${point.name}`} style={styles.courseMiniCard}>
                       <Text style={styles.listTitle}>{point.distanceKm}km / {point.type === "retire-bus" ? "リタイアバス" : point.type === "medical" ? "救護" : "サポート"}</Text>
-                      <Text style={styles.muted}>{point.name} / 信頼度 {point.confidence ?? "unknown"}</Text>
+                      <Text style={styles.muted}>{point.name} / 確認度 {confidenceLabel(point.confidence)}</Text>
                     </View>
                   )) : null}
                   {!selectedDetail.waterStations?.length && !selectedDetail.supportPoints?.length && <Text style={styles.muted}>データなし</Text>}
@@ -2420,13 +2473,7 @@ export default function App() {
 
   function renderPlanTab() {
     const activePlanSection = planSection === "過去比較" ? "出力" : planSection;
-    const normalizedPlanPaceType = normalizedPaceType(planForm.paceType);
-    const detailedPaceValue =
-      normalizedPlanPaceType === "後半温存型"
-        ? "前半ゆっくり後半アップ"
-        : normalizedPlanPaceType === "安全完走型"
-          ? "前半やや速め"
-          : "一定ペース";
+    const selectedRunStyle = planForm.runStyle ?? migrateRunStyle(planForm);
     return (
       <>
         <Segment value={activePlanSection} values={["作成", "ペース表", "出力"]} onChange={setPlanSection} />
@@ -2435,7 +2482,7 @@ export default function App() {
           <Card>
             <View style={styles.explainBox}>
               <Text style={styles.explainTitle}>計算の考え方</Text>
-              <Text style={styles.body}>入力方法は「何時間でゴールするか」を決めます。ペースタイプは「前半と後半にどう配分するか」を決めます。</Text>
+              <Text style={styles.body}>入力方法は「何時間でゴールするか」を決めます。走り方は「前半と後半にどう配分するか」を決めます。</Text>
             </View>
             <Text style={styles.label}>入力方法</Text>
             <Segment value={planForm.inputMode ?? "制限時間内で完走"} values={["制限時間内で完走", "目標ゴールタイムを狙う", "自己ベスト更新を狙う"]} labelForValue={planModeShortLabel} onChange={(v) => {
@@ -2458,39 +2505,56 @@ export default function App() {
                 <Text style={styles.helpText}>フルPB: {formatDuration(getFullPbSeconds(store.pbs))} / 提案目標: {formatDuration(getPlanOfficialTargetSeconds(selectedRace, planForm, store.pbs))}</Text>
               </>
             )}
-            <Text style={styles.label}>ペースタイプ</Text>
-            <Segment value={normalizedPlanPaceType} values={["安全完走型", "一定ペース型", "後半温存型"]} onChange={(v) => {
-              setPlanSavedMessage("");
-              setPlanForm((prev) => ({ ...prev, paceType: v as Plan["paceType"] }));
-            }} />
-            <Text style={styles.helpText}>{paceTypeDescription(planForm.paceType)}</Text>
-            {advancedFeaturesEnabled && (
-              <View style={styles.advancedPanel}>
-                <Text style={styles.sectionTitle}>詳細ペース配分</Text>
-                <Text style={styles.body}>同じペースタイプを、レース戦略の言葉で細かく確認できます。選択内容はペース表に反映されます。</Text>
+            <Text style={styles.label}>走り方</Text>
+            <View style={styles.segmentStack}>
+              {[
+                ["even", "negative-5", "negative-10"],
+                ["positive-5", "positive-10", "course-adaptive"]
+              ].map((row) => (
                 <Segment
-                  value={detailedPaceValue}
-                  values={["一定ペース", "前半ゆっくり後半アップ", "前半やや速め"]}
+                  key={row.join("-")}
+                  value={selectedRunStyle}
+                  values={row}
+                  labelForValue={(value) => runStyleLabel(value as RunPlanStyle)}
                   onChange={(value) => {
+                    const runStyle = value as RunPlanStyle;
+                    const splitMin = styleToSplitMinutes(runStyle);
+                    const strategy = styleToStrategy(runStyle);
                     setPlanSavedMessage("");
-                    const nextType = value === "前半ゆっくり後半アップ" ? "後半温存型" : value === "前半やや速め" ? "安全完走型" : "一定ペース型";
-                    setPlanForm((prev) => ({ ...prev, paceType: nextType as Plan["paceType"], splitStrategy: defaultStrategyForPaceType(nextType as Plan["paceType"]) }));
+                    setPlanForm((prev) => ({
+                      ...prev,
+                      runStyle,
+                      paceType: runStyleToPaceType(runStyle),
+                      splitStrategy: strategy,
+                      splitDifferenceMin: String(splitMin),
+                      useElevationAdjustment: runStyle === "course-adaptive"
+                    }));
                   }}
                 />
+              ))}
+            </View>
+            <Text style={styles.helpText}>{runStyleDescription(selectedRunStyle)}</Text>
+            {selectedRunStyle === "course-adaptive" && !raceSegments.length && !selectedRaceData?.sections.some((section) => section.terrain !== "unknown") && (
+              <Text style={styles.noticeText}>高低差データが未登録のため、基本ペースで計算します。大会タブの高低差から登録できます。</Text>
+            )}
+            {advancedFeaturesEnabled && (
+              <View style={styles.advancedPanel}>
+                <Text style={styles.sectionTitle}>詳細設定</Text>
+                <Text style={styles.body}>細かく調整したい場合だけ使います。通常は上の6種類から選ぶだけで大丈夫です。</Text>
                 <Text style={styles.label}>前後半の配分</Text>
                 <Segment
-                  value={planForm.splitStrategy ?? defaultStrategyForPaceType(planForm.paceType)}
+                  value={planForm.splitStrategy ?? styleToStrategy(selectedRunStyle)}
                   values={["even", "negative", "positive"]}
                   labelForValue={splitStrategyLabel}
                   onChange={(value) => {
                     setPlanSavedMessage("");
-                    setPlanForm((prev) => ({ ...prev, splitStrategy: value as CoursePaceStrategy }));
+                    setPlanForm((prev) => ({ ...prev, runStyle: "custom", splitStrategy: value as CoursePaceStrategy }));
                   }}
                 />
-                <Text style={styles.helpText}>{splitStrategyDescription(planForm.splitStrategy ?? defaultStrategyForPaceType(planForm.paceType))}</Text>
+                <Text style={styles.helpText}>{splitStrategyDescription(planForm.splitStrategy ?? styleToStrategy(selectedRunStyle))}</Text>
                 <SelectField
                   label="前後半差"
-                  value={planForm.splitDifferenceMin ?? "0"}
+                  value={planForm.splitDifferenceMin ?? String(styleToSplitMinutes(selectedRunStyle))}
                   options={SPLIT_DIFF_OPTIONS}
                   displayValue={(value) => value === "custom" ? "自分で入力" : `${value}分`}
                   pickerId="plan-split-diff"
@@ -2498,16 +2562,33 @@ export default function App() {
                   setActivePicker={setActivePicker}
                   onSelect={(value) => {
                     setPlanSavedMessage("");
-                    setPlanForm((prev) => ({ ...prev, splitDifferenceMin: value }));
+                    setPlanForm((prev) => ({ ...prev, runStyle: "custom", splitDifferenceMin: value }));
                   }}
                 />
                 {planForm.splitDifferenceMin === "custom" && (
                   <Input label="前後半差 分" value={planForm.customSplitDifferenceMin ?? ""} onChangeText={(value) => {
                     setPlanSavedMessage("");
-                    setField(setPlanForm, "customSplitDifferenceMin", value);
+                    setPlanForm((prev) => ({ ...prev, runStyle: "custom", customSplitDifferenceMin: value }));
                   }} keyboardType="number-pad" />
                 )}
-                {splitDiffMinutes(planForm) >= 15 && <Text style={styles.noticeText}>前後半差が大きめです。関門時刻と後半の失速リスクを確認してください。</Text>}
+                <View style={styles.switchRow}>
+                  <View style={styles.listText}>
+                    <Text style={styles.label}>高低差補正を使う</Text>
+                    <Text style={styles.helpText}>大会タブの高低差、または公式大会データの区間情報を5kmペースに反映します。</Text>
+                  </View>
+                  <Switch value={Boolean(planForm.useElevationAdjustment)} onValueChange={(value) => {
+                    setPlanSavedMessage("");
+                    setPlanForm((prev) => ({ ...prev, runStyle: value ? "course-adaptive" : prev.runStyle, useElevationAdjustment: value }));
+                  }} />
+                </View>
+                <View style={styles.switchRow}>
+                  <View style={styles.listText}>
+                    <Text style={styles.label}>関門情報を表示</Text>
+                    <Text style={styles.helpText}>記録狙いでも関門余裕を確認したい場合にオンにします。</Text>
+                  </View>
+                  <Switch value={Boolean(planForm.showCheckpointDetails)} onValueChange={(value) => setPlanForm((prev) => ({ ...prev, showCheckpointDetails: value }))} />
+                </View>
+                {splitDiffMinutes(planForm) >= 15 && <Text style={styles.noticeText}>前後半差が大きめです。現実的なペース配分にならない可能性があります。</Text>}
               </View>
             )}
             <Input label="最低ほしい関門余裕（分）" value={planForm.gateBufferMin} onChangeText={(v) => {
@@ -2517,7 +2598,7 @@ export default function App() {
             <Text style={styles.helpText}>現在は表示確認用です。自動補正は次の改善候補として残しています。</Text>
             <View style={styles.planPreview}>
               <Metric label="ゴール目標の決め方" value={planTargetLabel(planForm.inputMode)} />
-              <Metric label="配分方法" value={normalizedPaceType(planForm.paceType)} />
+              <Metric label="走り方" value={runStyleLabel(selectedRunStyle)} />
               <Metric label="予測ゴール" value={formatDuration(getPlanOfficialTargetSeconds(selectedRace, planForm, store.pbs))} />
               <Metric label="必要な平均ペース" value={selectedRace && getPlanTargetSeconds(selectedRace, planForm, store.pbs) ? formatPace(((getPlanTargetSeconds(selectedRace, planForm, store.pbs) ?? 0) - totalStopSec) / Math.max(n(selectedRace.distanceKm), 1)) : "-"} />
             </View>
@@ -2544,13 +2625,18 @@ export default function App() {
   }
 
   function renderPaceTable() {
-    const goalRow = paceRows[paceRows.length - 1];
-    const summaryRows = [
-      ...Array.from({ length: Math.floor(n(selectedRace?.distanceKm ?? "0") / 5) }, (_, index) => (index + 1) * 5)
-        .map((km) => paceRows.find((row) => Math.abs(row.km - km) < 0.01))
-        .filter(Boolean) as PaceRow[],
-      ...(goalRow ? [goalRow] : [])
-    ].filter((row, index, rows) => rows.findIndex((item) => Math.abs(item.km - row.km) < 0.01) === index);
+    const selectedRunStyle = selectedPlan?.runStyle ?? migrateRunStyle(selectedPlan ?? {});
+    const showCheckpointSummary = raceGates.length > 0 && (
+      (selectedPlan?.inputMode ?? "制限時間内で完走") === "制限時間内で完走" ||
+      Boolean(selectedPlan?.showCheckpointDetails) ||
+      selectedRaceData?.checkpointImportance === "high" ||
+      Boolean(selectedRaceData?.showCheckpointsForPerformanceMode)
+    );
+    const paceSectionLabel = (startKm: number, endKm: number) => {
+      const start = startKm.toFixed(startKm % 1 ? 1 : 0);
+      const end = endKm.toFixed(endKm % 1 ? 3 : 0).replace(/\.?0+$/, "");
+      return `${start}-${end}km`;
+    };
 
     return (
       <>
@@ -2574,44 +2660,29 @@ export default function App() {
           )) : <Text style={styles.muted}>給水/停止は未登録です。</Text>}
         </Card>
         <Card>
-          <Text style={styles.sectionTitle}>5km区間ペース提案（試算）</Text>
-          <Text style={styles.body}>目標タイム、前後半の配分、登録済みコース特性から計算した参考ペースです。完走や記録を保証するものではありません。</Text>
+          <Text style={styles.sectionTitle}>5kmごとのペースプラン</Text>
+          <Text style={styles.body}>選択中の走り方「{runStyleLabel(selectedRunStyle)}」で作った区間ペースです。高低差補正を使う設定のときは、大会タブの高低差も反映します。</Text>
           <Text style={styles.helpText}>
             {selectedRaceData
               ? `参照データ: ${selectedRaceData.name} / ${raceDataStatusLabel(selectedRaceData.verificationStatus)}`
-              : "大会データ未選択のため、コース特性なしの平坦目安として表示します。"}
+              : "大会データ未選択です。手入力の高低差がなければ、平坦として計算します。"}
           </Text>
           {coursePaceRows.length ? coursePaceRows.map((row) => (
             <View key={`course-${row.startKm}-${row.endKm}`} style={styles.coursePaceRow}>
               <View style={styles.listText}>
-                <Text style={styles.listTitle}>{row.startKm.toFixed(row.startKm % 1 ? 1 : 0)} - {row.endKm.toFixed(row.endKm % 1 ? 1 : 0)}km / {terrainLabel(row.terrain)}</Text>
-                <Text style={styles.muted}>{row.description}</Text>
-                <Text style={styles.helpText}>補正 {row.adjustmentSecondsPerKm > 0 ? "+" : ""}{row.adjustmentSecondsPerKm}秒/km / 信頼度 {row.confidence}</Text>
+                <Text style={styles.listTitle}>{paceSectionLabel(row.startKm, row.endKm)} / {terrainLabel(row.terrain)}</Text>
+                <Text style={styles.muted}>区間タイム {formatDuration(row.sectionSeconds)} / 累計 {formatDuration(row.cumulativeSeconds)}</Text>
+                <Text style={styles.helpText}>{row.adjustmentSecondsPerKm ? `高低差補正 ${row.adjustmentSecondsPerKm > 0 ? "+" : ""}${row.adjustmentSecondsPerKm}秒/km` : "高低差補正なし"}{row.description ? ` / ${row.description}` : ""}</Text>
               </View>
               <View style={styles.coursePaceValue}>
-                <Text style={styles.metricLabel}>目安</Text>
+                <Text style={styles.metricLabel}>推奨ペース</Text>
                 <Text style={styles.metricValue}>{formatPace(row.paceSecondsPerKm)}</Text>
-                <Text style={styles.muted}>{formatDuration(row.sectionSeconds)}</Text>
+                <Text style={styles.muted}>{selectedRace?.startTime ? addMinutesToClock(getRealStartTime(selectedRace), row.cumulativeSeconds / 60) : formatDuration(row.cumulativeSeconds)}</Text>
               </View>
             </View>
           )) : <Text style={styles.muted}>プランを作成すると表示されます。</Text>}
         </Card>
-        <Card>
-          <Text style={styles.sectionTitle}>5kmごとの目安</Text>
-          <View style={styles.summaryTableHeader}>
-            <Text style={styles.summaryTableCell}>距離</Text>
-            <Text style={styles.summaryTableCell}>通過予定</Text>
-            <Text style={styles.summaryTableCell}>ペース</Text>
-          </View>
-          {summaryRows.length ? summaryRows.map((row) => (
-            <View key={`summary-${row.km}`} style={styles.summaryTableRow}>
-              <Text style={styles.summaryTableCell}>{row === goalRow ? "ゴール" : `${row.km.toFixed(0)}km`}</Text>
-              <Text style={styles.summaryTableCell}>{row.etaMinutes == null ? formatDuration(row.cumulativeSec) : addMinutesToClock("00:00", row.etaMinutes)}</Text>
-              <Text style={styles.summaryTableCell}>{formatPace(row.adjustedLapSec)}</Text>
-            </View>
-          )) : <Text style={styles.muted}>ペース表を作成すると表示されます。</Text>}
-        </Card>
-        {raceGates.length > 0 && (
+        {showCheckpointSummary && (
           <Card>
             <Text style={styles.sectionTitle}>関門だけ確認</Text>
             {gateRows.map((row) => (
@@ -3377,7 +3448,9 @@ const styles = StyleSheet.create({
   dangerButtonText: { color: "#a83429", fontWeight: "800", fontSize: 13 },
   rowGap: { gap: 9 },
   buttonRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
+  switchRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#fffdf8", borderWidth: 1, borderColor: "#ebe7dc", borderRadius: 8, padding: 12, marginTop: 8, marginBottom: 10 },
   planPreview: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 2, marginBottom: 12 },
+  segmentStack: { gap: 0, marginBottom: 2 },
   segment: { flexDirection: "row", backgroundColor: "#e8e3d8", borderRadius: 8, padding: 4, marginBottom: 14 },
   segmentItem: { flexGrow: 0, flexShrink: 0, minWidth: 0, minHeight: 40, alignItems: "center", justifyContent: "center", borderRadius: 6, paddingHorizontal: 4 },
   segmentItemActive: { backgroundColor: "#fffdf8" },
