@@ -264,7 +264,8 @@ const n = (value: string, fallback = 0) => {
 const distanceLabel = (value: string | number) => {
   const km = typeof value === "number" ? value : n(value, Number.NaN);
   if (!Number.isFinite(km)) return String(value).replace(/km$/i, "");
-  return km.toFixed(km % 1 ? 3 : 0).replace(/\.?0+$/, "");
+  if (Number.isInteger(km)) return String(km);
+  return km.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
 };
 
 function parseDuration(value: string): number | null {
@@ -1541,7 +1542,8 @@ export default function App() {
         }).join("");
         return `<tr><td>${escapeHtml(point.label)}</td>${cells}</tr>`;
       }).join("");
-      const html = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 portrait;margin:12mm}body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#263238}h1{font-size:18px;margin:0 0 8px}.summary{margin:8px 0 12px;padding:8px;background:#f6f3ee;font-size:11px}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #ccd6d0;padding:6px;text-align:left;vertical-align:top}th{background:#e9f1eb}span{color:#60706a;font-size:9px}@media print{body{margin:0}.summary{break-inside:avoid}tr{break-inside:avoid}}</style></head><body><h1>RUN Finish Planner</h1><div class="summary"><b>${escapeHtml(selectedRace?.name ?? "")}</b><br>3プラン比較 / スタート ${escapeHtml(selectedRace?.startTime ?? "-")} / ロスタイム ${escapeHtml(selectedRace?.lostTimeMin ?? "0")}分 / 実走開始 ${escapeHtml(getRealStartTime(selectedRace))}</div><table><thead><tr><th>距離</th>${headerCells}</tr></thead><tbody>${rows}</tbody></table></body></html>`;
+      const stripTable = `<div class="strip"><h2>CHEBIS RUN</h2><p class="sub">3 PLAN PACE CARD</p><div class="race"><b>${escapeHtml(selectedRace?.name ?? "")}</b><br>開始 ${escapeHtml(getRealStartTime(selectedRace))} / ロス ${escapeHtml(selectedRace?.lostTimeMin ?? "0")}分<br>安全・目標・攻めるの通過時刻比較</div><table><thead><tr><th>距離</th>${headerCells}</tr></thead><tbody>${rows}</tbody></table><p class="foot">公式情報は大会前に必ず確認してください。完走を保証するものではありません。</p></div>`;
+      const html = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 portrait;margin:8mm}body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#182426;margin:0}.sheet{display:flex;gap:8mm;align-items:flex-start}.strip{width:50%;border:1.4px solid #1b365d;padding:4mm;min-height:270mm;box-sizing:border-box}h1{font-size:13px;margin:0 0 3mm}.strip h2{font-size:17px;margin:0;color:#1b365d;letter-spacing:.3px}.sub{font-size:9px;font-weight:700;color:#1b365d;margin:1mm 0 2mm}.race{background:#f2f0ea;padding:2.2mm;font-size:8.5px;line-height:1.45;margin-bottom:2mm}table{width:100%;border-collapse:collapse;font-size:8px}th,td{border:1px solid #1b365d;padding:1.8mm 1.2mm;text-align:left;vertical-align:top}th{background:#e7eee9;color:#1b365d}span{color:#60706a;font-size:7px}.foot{font-size:7px;color:#60706a;line-height:1.35;margin-top:2mm}@media print{body{margin:0}.strip{break-inside:avoid}tr{break-inside:avoid}}</style></head><body><h1>RUN Finish Planner / 3プラン比較短冊</h1><div class="sheet">${stripTable}${stripTable}</div></body></html>`;
       if (Platform.OS === "web") {
         const web = globalThis as any;
         const win = web.open("", "_blank");
