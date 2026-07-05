@@ -61,6 +61,8 @@ export type OfficialRaceData = {
   city?: string;
   eventDate?: string | null;
   officialEventDate?: string | null;
+  entryStartDate?: string | null;
+  entryEndDate?: string | null;
   mccListedDate?: string | null;
   dateConflict?: boolean;
   category: RaceDataCategory;
