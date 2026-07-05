@@ -1447,8 +1447,12 @@ export default function App() {
     });
   }
 
+  function normalizedExportMode(): PaceExportMode {
+    return paceExportMode === "全距離" ? "全距離" : "持ち出し用";
+  }
+
   function getExportPaceRows() {
-    return paceExportMode === "全距離" ? paceRows : getCompactPaceRows();
+    return normalizedExportMode() === "全距離" ? paceRows : getCompactPaceRows();
   }
 
   async function shareFile(uri: string) {
@@ -1462,7 +1466,8 @@ export default function App() {
   }
 
   async function exportCsv() {
-    if (paceExportMode === "持ち出し用") {
+    const exportMode = normalizedExportMode();
+    if (exportMode === "持ち出し用") {
       const columns = getPaceComparisonColumns();
       const points = comparisonPointLabels();
       const header = ["大会名", "距離", ...columns.flatMap((column) => [`${column.label} 通過予定`, `${column.label} ペース`])];
@@ -1531,7 +1536,8 @@ export default function App() {
   }
 
   async function exportPdf() {
-    if (paceExportMode === "持ち出し用") {
+    const exportMode = normalizedExportMode();
+    if (exportMode === "持ち出し用") {
       const exportRows = getCompactPaceRows();
       let previousCumulativeSec = 0;
       const raceDayRows = exportRows
@@ -1560,7 +1566,7 @@ export default function App() {
       }).join("");
       const raceDayStrip = `<div class="strip"><h2>CHEBIS RUN</h2><p class="sub">RACE DAY PACE CARD</p><div class="race"><b>${escapeHtml(selectedRace?.name ?? "")}</b><br>目標 ${escapeHtml(goalTimeLabel)} / 平均 ${escapeHtml(formatPace(basePace))}<br>開始 ${escapeHtml(getRealStartTime(selectedRace))} / 関門余裕 最小${escapeHtml(formatMinutesLabel(minMargin))}</div><table><thead><tr><th>距離</th><th>通過</th><th>区間</th><th>確認メモ</th></tr></thead><tbody>${raceDayRows}</tbody></table><p class="foot">公式情報は大会前に必ず確認してください。完走を保証するものではありません。</p></div>`;
       const comparisonStrip = `<div class="strip"><h2>CHEBIS RUN</h2><p class="sub">3 PLAN PACE CARD</p><div class="race"><b>${escapeHtml(selectedRace?.name ?? "")}</b><br>開始 ${escapeHtml(getRealStartTime(selectedRace))} / ロス ${escapeHtml(selectedRace?.lostTimeMin ?? "0")}分<br>安全・目標・攻めるの通過時刻比較</div><table class="compare"><thead><tr><th>距離</th>${headerCells}</tr></thead><tbody>${comparisonRows}</tbody></table><p class="foot">左は当日確認用、右はペース判断用です。二つ折りして携帯できます。</p></div>`;
-      const html = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 portrait;margin:8mm}body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#182426;margin:0}h1{font-size:12px;margin:0 0 3mm}.sheet{display:flex;gap:6mm;align-items:flex-start}.strip{flex:1 1 0;border:1.4px solid #1b365d;padding:3.5mm;box-sizing:border-box;max-width:calc((100% - 6mm)/2)}.strip h2{font-size:16px;margin:0;color:#1b365d;letter-spacing:.3px}.sub{font-size:8.5px;font-weight:700;color:#1b365d;margin:1mm 0 2mm}.race{background:#f2f0ea;padding:2mm;font-size:8px;line-height:1.38;margin-bottom:2mm}table{width:100%;border-collapse:collapse;font-size:7.8px}th,td{border:1px solid #1b365d;padding:1.55mm 1mm;text-align:left;vertical-align:top}th{background:#e7eee9;color:#1b365d}.compare th,.compare td{padding:1.45mm .85mm}.compare span{color:#60706a;font-size:6.8px}.foot{font-size:6.8px;color:#60706a;line-height:1.35;margin-top:2mm}@media print{body{margin:0}.strip{break-inside:avoid;page-break-inside:avoid}tr{break-inside:avoid}}</style></head><body><h1>RUN Finish Planner / 持ち出し用短冊</h1><div class="sheet">${raceDayStrip}${comparisonStrip}</div></body></html>`;
+      const html = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 portrait;margin:7mm}*{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#182426;margin:0}h1{font-size:11px;margin:0 0 2.5mm}.sheet{display:flex;gap:5mm;align-items:flex-start;width:100%}.strip{flex:1 1 0;border:1.2px solid #1b365d;padding:3mm;max-width:calc((100% - 5mm)/2);height:270mm;overflow:hidden}.strip h2{font-size:15px;line-height:1.05;margin:0;color:#1b365d;letter-spacing:.3px}.sub{font-size:7.8px;font-weight:700;color:#1b365d;margin:.8mm 0 1.8mm}.race{background:#f2f0ea;padding:1.6mm;font-size:7.3px;line-height:1.32;margin-bottom:1.8mm}table{width:100%;border-collapse:collapse;font-size:7.1px;table-layout:fixed}th,td{border:1px solid #1b365d;padding:1.2mm .7mm;text-align:left;vertical-align:top;line-height:1.25}th{background:#e7eee9;color:#1b365d}.strip table th:first-child,.strip table td:first-child{width:12mm;white-space:nowrap}.strip table th:nth-child(2),.strip table td:nth-child(2){width:13mm;white-space:nowrap}.strip table th:nth-child(3),.strip table td:nth-child(3){width:15mm;white-space:nowrap}.compare th,.compare td{padding:1.1mm .55mm}.compare th:first-child,.compare td:first-child{width:13mm;white-space:nowrap}.compare span{color:#60706a;font-size:6.1px}.foot{font-size:6.1px;color:#60706a;line-height:1.25;margin-top:1.5mm}@media print{body{margin:0}.strip{break-inside:avoid;page-break-inside:avoid}tr{break-inside:avoid}}</style></head><body><h1>RUN Finish Planner / 持ち出し用短冊</h1><div class="sheet">${raceDayStrip}${comparisonStrip}</div></body></html>`;
       if (Platform.OS === "web") {
         const web = globalThis as any;
         const win = web.open("", "_blank");
@@ -1591,7 +1597,7 @@ export default function App() {
         }
       )
       .join("");
-    const html = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 portrait;margin:12mm}body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#263238}h1{font-size:18px;margin:0 0 8px}.summary{margin:8px 0 12px;padding:8px;background:#f6f3ee;font-size:11px}table{width:100%;border-collapse:collapse;font-size:8.5px}th,td{border:1px solid #ccd6d0;padding:4px;text-align:left;vertical-align:top}th{background:#e9f1eb}@media print{body{margin:0}.summary{break-inside:avoid}tr{break-inside:avoid}}</style></head><body><h1>RUN Finish Planner</h1><div class="summary"><b>${escapeHtml(selectedRace?.name ?? "")}</b><br>出力範囲 ${escapeHtml(paceExportMode)} / スタート ${escapeHtml(selectedRace?.startTime ?? "-")} / ロスタイム ${escapeHtml(selectedRace?.lostTimeMin ?? "0")}分 / 実走開始 ${escapeHtml(getRealStartTime(selectedRace))} / 目標 ${escapeHtml(goalTimeLabel)} / 予測ゴール ${escapeHtml(formatDurationJa(predictedOfficialGoalSec))} / 関門余裕 最小${escapeHtml(formatMinutesLabel(minMargin))}</div><table><thead><tr><th>距離</th><th>予定ラップ</th><th>通過予定</th><th>関門時刻</th><th>関門余裕</th><th>高低差</th><th>給水/停止</th><th>メモ</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 portrait;margin:12mm}body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#263238}h1{font-size:18px;margin:0 0 8px}.summary{margin:8px 0 12px;padding:8px;background:#f6f3ee;font-size:11px}table{width:100%;border-collapse:collapse;font-size:8.5px}th,td{border:1px solid #ccd6d0;padding:4px;text-align:left;vertical-align:top}th{background:#e9f1eb}@media print{body{margin:0}.summary{break-inside:avoid}tr{break-inside:avoid}}</style></head><body><h1>RUN Finish Planner</h1><div class="summary"><b>${escapeHtml(selectedRace?.name ?? "")}</b><br>出力範囲 ${escapeHtml(exportMode)} / スタート ${escapeHtml(selectedRace?.startTime ?? "-")} / ロスタイム ${escapeHtml(selectedRace?.lostTimeMin ?? "0")}分 / 実走開始 ${escapeHtml(getRealStartTime(selectedRace))} / 目標 ${escapeHtml(goalTimeLabel)} / 予測ゴール ${escapeHtml(formatDurationJa(predictedOfficialGoalSec))} / 関門余裕 最小${escapeHtml(formatMinutesLabel(minMargin))}</div><table><thead><tr><th>距離</th><th>予定ラップ</th><th>通過予定</th><th>関門時刻</th><th>関門余裕</th><th>高低差</th><th>給水/停止</th><th>メモ</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
     if (Platform.OS === "web") {
       const web = globalThis as any;
       const win = web.open("", "_blank");
@@ -2545,7 +2551,8 @@ export default function App() {
   }
 
   function renderPlanTab() {
-    const activePlanSection = planSection === "過去比較" ? "印刷・出力" : planSection;
+    const activePlanSection = planSection === "過去比較" || planSection === "出力" ? "印刷・出力" : planSection;
+    const exportMode = normalizedExportMode();
     const selectedRunStyle = planForm.runStyle ?? migrateRunStyle(planForm);
     return (
       <>
@@ -2685,13 +2692,13 @@ export default function App() {
             <Text style={styles.sectionTitle}>印刷・出力</Text>
             <Text style={styles.body}>現在のペース表をCSVまたはA4縦PDFで出力します。CSVはUTF-8 BOM付きです。</Text>
             <Text style={styles.label}>出力する範囲</Text>
-            <Segment value={paceExportMode} values={["持ち出し用", "全距離"]} onChange={(value) => setPaceExportMode(value as PaceExportMode)} />
+            <Segment value={exportMode} values={["持ち出し用", "全距離"]} onChange={(value) => setPaceExportMode(value as PaceExportMode)} />
             <Text style={styles.helpText}>
-              {paceExportMode === "持ち出し用"
-                ? "A4縦1枚に、当日用ペースカードと3プラン比較を横並びで印刷します。二つ折りして携帯しやすい形式です。"
+              {exportMode === "持ち出し用"
+                ? "A4縦1枚に、当日用と3プラン比較を横並びで印刷します。PDF見出しが「持ち出し用短冊」になっていれば最新版です。"
                 : "確認用として1kmごとの全行を出力します。印刷枚数は多くなります。"}
             </Text>
-            {paceExportMode === "持ち出し用" && (
+            {exportMode === "持ち出し用" && (
               <View style={styles.comparisonPreview}>
                 {getPaceComparisonColumns().map((column) => (
                   <Metric key={column.label} label={column.label} value={formatDuration(column.targetSec)} />
