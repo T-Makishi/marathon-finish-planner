@@ -827,6 +827,7 @@ export default function App() {
   const [raceSection, setRaceSection] = useState("大会");
   const [planSection, setPlanSection] = useState("作成");
   const [paceExportMode, setPaceExportMode] = useState<PaceExportMode>("持ち出し用");
+  const [paceDetailOpen, setPaceDetailOpen] = useState(false);
   const [pbSection, setPbSection] = useState("PB");
   const [settingsSection, setSettingsSection] = useState("設定");
   const [trainingSection, setTrainingSection] = useState("概要");
@@ -1564,9 +1565,10 @@ export default function App() {
         }).join("");
         return `<tr><td>${escapeHtml(point.label)}</td>${cells}</tr>`;
       }).join("");
-      const raceDayStrip = `<div class="strip"><h2>CHEBIS RUN</h2><p class="sub">RACE DAY PACE CARD</p><div class="race"><b>${escapeHtml(selectedRace?.name ?? "")}</b><br>目標 ${escapeHtml(goalTimeLabel)} / 平均 ${escapeHtml(formatPace(basePace))}<br>開始 ${escapeHtml(getRealStartTime(selectedRace))} / 関門余裕 最小${escapeHtml(formatMinutesLabel(minMargin))}</div><table><thead><tr><th>距離</th><th>通過</th><th>区間</th><th>確認メモ</th></tr></thead><tbody>${raceDayRows}</tbody></table><p class="foot">公式情報は大会前に必ず確認してください。完走を保証するものではありません。</p></div>`;
-      const comparisonStrip = `<div class="strip"><h2>CHEBIS RUN</h2><p class="sub">3 PLAN PACE CARD</p><div class="race"><b>${escapeHtml(selectedRace?.name ?? "")}</b><br>開始 ${escapeHtml(getRealStartTime(selectedRace))} / ロス ${escapeHtml(selectedRace?.lostTimeMin ?? "0")}分<br>安全・目標・攻めるの通過時刻比較</div><table class="compare"><thead><tr><th>距離</th>${headerCells}</tr></thead><tbody>${comparisonRows}</tbody></table><p class="foot">左は当日確認用、右はペース判断用です。二つ折りして携帯できます。</p></div>`;
-      const html = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 portrait;margin:7mm}*{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#182426;margin:0}h1{font-size:11px;margin:0 0 2.5mm}.sheet{display:flex;gap:5mm;align-items:flex-start;width:100%}.strip{flex:1 1 0;border:1.2px solid #1b365d;padding:3mm;max-width:calc((100% - 5mm)/2);height:270mm;overflow:hidden}.strip h2{font-size:15px;line-height:1.05;margin:0;color:#1b365d;letter-spacing:.3px}.sub{font-size:7.8px;font-weight:700;color:#1b365d;margin:.8mm 0 1.8mm}.race{background:#f2f0ea;padding:1.6mm;font-size:7.3px;line-height:1.32;margin-bottom:1.8mm}table{width:100%;border-collapse:collapse;font-size:7.1px;table-layout:fixed}th,td{border:1px solid #1b365d;padding:1.2mm .7mm;text-align:left;vertical-align:top;line-height:1.25}th{background:#e7eee9;color:#1b365d}.strip table th:first-child,.strip table td:first-child{width:12mm;white-space:nowrap}.strip table th:nth-child(2),.strip table td:nth-child(2){width:13mm;white-space:nowrap}.strip table th:nth-child(3),.strip table td:nth-child(3){width:15mm;white-space:nowrap}.compare th,.compare td{padding:1.1mm .55mm}.compare th:first-child,.compare td:first-child{width:13mm;white-space:nowrap}.compare span{color:#60706a;font-size:6.1px}.foot{font-size:6.1px;color:#60706a;line-height:1.25;margin-top:1.5mm}@media print{body{margin:0}.strip{break-inside:avoid;page-break-inside:avoid}tr{break-inside:avoid}}</style></head><body><h1>RUN Finish Planner / 持ち出し用短冊</h1><div class="sheet">${raceDayStrip}${comparisonStrip}</div></body></html>`;
+      const raceDayPanel = `<section class="panel"><h2>CHEBIS RUN</h2><p class="sub">RACE DAY</p><div class="race"><b>${escapeHtml(selectedRace?.name ?? "")}</b><br>目標 <strong>${escapeHtml(goalTimeLabel)}</strong> / 平均 <strong>${escapeHtml(formatPace(basePace))}</strong><br>開始 <strong>${escapeHtml(getRealStartTime(selectedRace))}</strong> / 関門余裕 最小<strong>${escapeHtml(formatMinutesLabel(minMargin))}</strong></div><table><thead><tr><th>距離</th><th>通過</th><th>区間</th><th>確認</th></tr></thead><tbody>${raceDayRows}</tbody></table></section>`;
+      const comparisonPanel = `<section class="panel"><h2>CHEBIS RUN</h2><p class="sub">3 PLAN</p><div class="race"><b>${escapeHtml(selectedRace?.name ?? "")}</b><br>安全・目標・攻めるの通過比較<br>ロス ${escapeHtml(selectedRace?.lostTimeMin ?? "0")}分 / 開始 ${escapeHtml(getRealStartTime(selectedRace))}</div><table class="compare"><thead><tr><th>距離</th>${headerCells}</tr></thead><tbody>${comparisonRows}</tbody></table></section>`;
+      const ticket = (label: string) => `<div class="ticket"><div class="ticketLabel">${label}</div><div class="foldLine"></div>${raceDayPanel}${comparisonPanel}<p class="foot">公式情報は大会前に必ず確認してください。完走を保証するものではありません。</p></div>`;
+      const html = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 portrait;margin:7mm}*{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#182426;margin:0}h1{font-size:9px;margin:0 0 2mm}.sheet{width:100%;display:flex;flex-direction:column;gap:4mm}.ticket{position:relative;height:132mm;border:1.4px solid #1b365d;padding:4mm;display:grid;grid-template-columns:1fr 1fr;column-gap:4mm;overflow:hidden;break-inside:avoid;page-break-inside:avoid}.ticket+.ticket{border-top-style:dashed}.ticketLabel{position:absolute;right:3mm;top:2mm;color:#1b365d;font-size:7px;font-weight:800}.foldLine{position:absolute;top:0;bottom:0;left:50%;border-left:1px dashed #8aa0b8}.panel{min-width:0}.panel h2{font-size:12.5px;line-height:1;margin:0;color:#1b365d;letter-spacing:.2px}.sub{font-size:6.6px;font-weight:800;color:#1b365d;margin:.6mm 0 1.1mm}.race{background:#f2f0ea;padding:1.1mm;font-size:6.2px;line-height:1.28;margin-bottom:1.2mm}table{width:100%;border-collapse:collapse;font-size:6.1px;table-layout:fixed}th,td{border:1px solid #1b365d;padding:.72mm .42mm;text-align:left;vertical-align:top;line-height:1.16;overflow-wrap:break-word}th{background:#e7eee9;color:#1b365d;font-weight:900}.panel table th:first-child,.panel table td:first-child{width:10.6mm;white-space:nowrap;font-weight:800}.panel table th:nth-child(2),.panel table td:nth-child(2){width:11mm;white-space:nowrap;font-weight:800}.panel table th:nth-child(3),.panel table td:nth-child(3){width:13mm;white-space:nowrap}.compare th,.compare td{padding:.66mm .38mm}.compare th:first-child,.compare td:first-child{width:11.5mm;white-space:nowrap;font-weight:900}.compare span{color:#60706a;font-size:5.25px}.foot{position:absolute;left:4mm;right:4mm;bottom:2.2mm;font-size:5.5px;color:#60706a;line-height:1.2;margin:0}.ticket:first-child::after{content:"";position:absolute;left:-2mm;right:-2mm;bottom:-2mm;border-bottom:1px dashed #8aa0b8}@media print{body{margin:0}tr{break-inside:avoid}.ticket{break-inside:avoid;page-break-inside:avoid}}</style></head><body><h1>RUN Finish Planner / レース本番用短冊</h1><div class="sheet">${ticket("本番用")}${ticket("控え")}</div></body></html>`;
       if (Platform.OS === "web") {
         const web = globalThis as any;
         const win = web.open("", "_blank");
@@ -2692,19 +2694,12 @@ export default function App() {
             <Text style={styles.sectionTitle}>印刷・出力</Text>
             <Text style={styles.body}>現在のペース表をCSVまたはA4縦PDFで出力します。CSVはUTF-8 BOM付きです。</Text>
             <Text style={styles.label}>出力する範囲</Text>
-            <Segment value={exportMode} values={["持ち出し用", "全距離"]} onChange={(value) => setPaceExportMode(value as PaceExportMode)} />
+            <Segment value={exportMode} values={["持ち出し用", "全距離"]} labelForValue={(value) => value === "持ち出し用" ? "レース本番用" : value} onChange={(value) => setPaceExportMode(value as PaceExportMode)} />
             <Text style={styles.helpText}>
               {exportMode === "持ち出し用"
-                ? "A4縦1枚に、当日用と3プラン比較を横並びで印刷します。PDF見出しが「持ち出し用短冊」になっていれば最新版です。"
+                ? "A4縦1枚に、本番用と控えを上下に印刷します。各短冊は中央の折り線で二つ折りできます。PDF見出しが「レース本番用短冊」になっていれば最新版です。"
                 : "確認用として1kmごとの全行を出力します。印刷枚数は多くなります。"}
             </Text>
-            {exportMode === "持ち出し用" && (
-              <View style={styles.comparisonPreview}>
-                {getPaceComparisonColumns().map((column) => (
-                  <Metric key={column.label} label={column.label} value={formatDuration(column.targetSec)} />
-                ))}
-              </View>
-            )}
             <View style={styles.rowGap}>
               <PrimaryButton label="CSV出力" onPress={exportCsv} />
               <SecondaryButton label="PDF出力" onPress={exportPdf} />
@@ -2797,7 +2792,7 @@ export default function App() {
                 <Metric key={column.label} label={column.label} value={formatDuration(column.targetSec)} />
               ))}
             </View>
-            <Text style={styles.helpText}>詳細な通過時刻は「印刷・出力」の持ち出し用PDFにまとめて出力します。</Text>
+            <Text style={styles.helpText}>詳細な通過時刻は「印刷・出力」のレース本番用PDFにまとめて出力します。</Text>
           </Card>
         )}
         {advancedFeaturesEnabled ? (
@@ -2814,8 +2809,16 @@ export default function App() {
                 <SecondaryButton label="自動計算に戻す" onPress={() => updateStore({ ...store, manualLaps: store.manualLaps.filter((manual) => manual.raceId !== selectedRaceId) })} />
               </View>
             </Card>
-            <Text style={styles.sectionCaption}>1kmごとの詳細</Text>
-            {paceRows.map((row) => (
+            <Card>
+              <View style={styles.detailHeader}>
+                <View style={styles.detailTitleBlock}>
+                  <Text style={styles.sectionTitle}>キロ毎表示</Text>
+                  <Text style={styles.helpText}>1kmごとの詳細は必要な時だけ開けます。スマホでは閉じたままでも、5kmごとの表と関門確認で全体を見られます。</Text>
+                </View>
+                <SecondaryButton label={paceDetailOpen ? "閉じる" : "表示する"} onPress={() => setPaceDetailOpen((current) => !current)} />
+              </View>
+            </Card>
+            {paceDetailOpen && paceRows.map((row) => (
               <View key={`${row.km}`} style={styles.paceCard}>
                 <View style={styles.paceHead}>
                   <Text style={styles.kmText}>{distanceLabel(row.gate?.distanceKm ?? row.km)} km</Text>
@@ -3589,6 +3592,8 @@ const styles = StyleSheet.create({
   raceDaySide: { minWidth: 92, alignItems: "flex-end", gap: 5 },
   coursePaceRow: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#fffdf8", borderWidth: 1, borderColor: "#ebe7dc", borderRadius: 8, padding: 12, marginTop: 8 },
   coursePaceValue: { minWidth: 86, alignItems: "flex-end" },
+  detailHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+  detailTitleBlock: { flex: 1 },
   gateSummary: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: "#ebe7dc", paddingTop: 10, marginTop: 10 },
   gateSummaryText: { flex: 1 },
   gateSummaryBadge: { alignItems: "flex-end", gap: 5 },
