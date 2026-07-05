@@ -107,7 +107,7 @@ type Plan = {
   gateBufferMin: string;
 };
 
-type PaceExportMode = "5km目安" | "全距離";
+type PaceExportMode = "当日用" | "3プラン比較" | "全距離";
 
 type StopPoint = {
   id: string;
@@ -831,7 +831,7 @@ export default function App() {
   const [tab, setTab] = useState("ホーム");
   const [raceSection, setRaceSection] = useState("大会");
   const [planSection, setPlanSection] = useState("作成");
-  const [paceExportMode, setPaceExportMode] = useState<PaceExportMode>("5km目安");
+  const [paceExportMode, setPaceExportMode] = useState<PaceExportMode>("当日用");
   const [pbSection, setPbSection] = useState("PB");
   const [settingsSection, setSettingsSection] = useState("設定");
   const [trainingSection, setTrainingSection] = useState("概要");
@@ -1423,6 +1423,51 @@ export default function App() {
       .sort((a, b) => a.km - b.km);
   }
 
+  function comparisonPointLabels() {
+    const distance = n(selectedRace?.distanceKm ?? "0");
+    const base = [1, ...Array.from({ length: Math.floor(distance / 5) }, (_, index) => (index + 1) * 5)];
+    const half = distance > 20 ? distance / 2 : null;
+    const points = [...base, ...(half ? [half] : []), distance]
+      .filter((km) => km > 0 && km <= distance + 0.001)
+      .sort((a, b) => a - b)
+      .filter((km, index, rows) => rows.findIndex((item) => Math.abs(item - km) < 0.05) === index);
+    return points.map((km) => ({
+      km,
+      label: Math.abs(km - distance) < 0.01 ? "ゴール" : half && Math.abs(km - half) < 0.05 ? "中間点" : `${distanceLabel(km)}km`
+    }));
+  }
+
+  function getComparisonRow(rows: PaceRow[], km: number) {
+    return rows.find((row) => Math.abs(row.km - km) < 0.05) ?? rows.find((row) => row.km >= km - 0.05) ?? rows[rows.length - 1];
+  }
+
+  function getPaceComparisonColumns() {
+    if (!selectedRace || !selectedPlan || !selectedOfficialTargetSec) return [];
+    const variants = [
+      { label: "安全", offsetSec: 10 * 60, runStyle: "positive-5" as RunPlanStyle },
+      { label: "標準", offsetSec: 0, runStyle: selectedPlan.runStyle ?? migrateRunStyle(selectedPlan) },
+      { label: "攻める", offsetSec: -10 * 60, runStyle: "negative-5" as RunPlanStyle }
+    ];
+    return variants.map((variant) => {
+      const targetSec = Math.max(60, selectedOfficialTargetSec + variant.offsetSec);
+      const plan: Plan = {
+        ...selectedPlan,
+        inputMode: "目標ゴールタイムを狙う",
+        targetTime: formatDuration(targetSec),
+        runStyle: variant.runStyle,
+        paceType: runStyleToPaceType(variant.runStyle),
+        splitStrategy: styleToStrategy(variant.runStyle),
+        splitDifferenceMin: String(styleToSplitMinutes(variant.runStyle)),
+        useElevationAdjustment: Boolean(selectedPlan.useElevationAdjustment || variant.runStyle === "course-adaptive")
+      };
+      return {
+        label: variant.label,
+        targetSec,
+        rows: buildPaceRows(selectedRace, plan, raceGates, raceSegments, raceStops, [], store.pbs)
+      };
+    });
+  }
+
   function getExportPaceRows() {
     return paceExportMode === "全距離" ? paceRows : getCompactPaceRows();
   }
@@ -1438,6 +1483,39 @@ export default function App() {
   }
 
   async function exportCsv() {
+    if (paceExportMode === "3プラン比較") {
+      const columns = getPaceComparisonColumns();
+      const points = comparisonPointLabels();
+      const header = ["大会名", "距離", ...columns.flatMap((column) => [`${column.label} 通過予定`, `${column.label} ペース`])];
+      const lines = points.map((point) => [
+        selectedRace?.name ?? "",
+        point.label,
+        ...columns.flatMap((column) => {
+          const row = getComparisonRow(column.rows, point.km);
+          return [
+            row?.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes),
+            row ? formatPace(row.adjustedLapSec) : "-"
+          ];
+        })
+      ]);
+      const csv = "\uFEFF" + [header, ...lines].map((line) => line.map(escapeCsv).join(",")).join("\n");
+      const safeName = (selectedRace?.name || "race-plan").replace(/[\\/:*?"<>|]/g, "_");
+      if (Platform.OS === "web") {
+        const web = globalThis as any;
+        const blob = new web.Blob([csv], { type: "text/csv;charset=utf-8" });
+        const url = web.URL.createObjectURL(blob);
+        const link = web.document.createElement("a");
+        link.href = url;
+        link.download = `${safeName}-comparison.csv`;
+        link.click();
+        web.URL.revokeObjectURL(url);
+        return;
+      }
+      const uri = `${FileSystem.documentDirectory}${safeName}-comparison.csv`;
+      await FileSystem.writeAsStringAsync(uri, csv, { encoding: FileSystem.EncodingType.UTF8 });
+      await shareFile(uri);
+      return;
+    }
     const header = ["大会名", "スタート時刻", "ロスタイム", "実走開始時刻", "目標ゴールタイム", "距離", "予定ラップ", "通過予定", "関門時刻", "関門余裕", "高低差補正", "給水/停止", "メモ"];
     const exportRows = getExportPaceRows();
     const lines = exportRows.map((row) => [
@@ -1474,6 +1552,35 @@ export default function App() {
   }
 
   async function exportPdf() {
+    if (paceExportMode === "3プラン比較") {
+      const columns = getPaceComparisonColumns();
+      const points = comparisonPointLabels();
+      const headerCells = columns.map((column) => `<th>${escapeHtml(column.label)}<br>${escapeHtml(formatDuration(column.targetSec))}</th>`).join("");
+      const rows = points.map((point) => {
+        const cells = columns.map((column) => {
+          const row = getComparisonRow(column.rows, point.km);
+          return `<td>${escapeHtml(row?.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes))}<br><span>${escapeHtml(row ? formatPace(row.adjustedLapSec) : "-")}</span></td>`;
+        }).join("");
+        return `<tr><td>${escapeHtml(point.label)}</td>${cells}</tr>`;
+      }).join("");
+      const html = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 portrait;margin:12mm}body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#263238}h1{font-size:18px;margin:0 0 8px}.summary{margin:8px 0 12px;padding:8px;background:#f6f3ee;font-size:11px}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #ccd6d0;padding:6px;text-align:left;vertical-align:top}th{background:#e9f1eb}span{color:#60706a;font-size:9px}@media print{body{margin:0}.summary{break-inside:avoid}tr{break-inside:avoid}}</style></head><body><h1>RUN Finish Planner</h1><div class="summary"><b>${escapeHtml(selectedRace?.name ?? "")}</b><br>3プラン比較 / スタート ${escapeHtml(selectedRace?.startTime ?? "-")} / ロスタイム ${escapeHtml(selectedRace?.lostTimeMin ?? "0")}分 / 実走開始 ${escapeHtml(getRealStartTime(selectedRace))}</div><table><thead><tr><th>距離</th>${headerCells}</tr></thead><tbody>${rows}</tbody></table></body></html>`;
+      if (Platform.OS === "web") {
+        const web = globalThis as any;
+        const win = web.open("", "_blank");
+        if (win) {
+          win.document.write(html);
+          win.document.close();
+          win.focus();
+          win.print();
+        } else {
+          Alert.alert("印刷画面", "ポップアップがブロックされました。ブラウザ設定を確認してください。");
+        }
+        return;
+      }
+      const result = await Print.printToFileAsync({ html, width: 595, height: 842 });
+      await shareFile(result.uri);
+      return;
+    }
     const exportRows = getExportPaceRows();
     const rows = exportRows
       .map(
@@ -2612,8 +2719,21 @@ export default function App() {
             <Text style={styles.sectionTitle}>出力</Text>
             <Text style={styles.body}>現在のペース表をCSVまたはA4縦PDFで出力します。CSVはUTF-8 BOM付きです。</Text>
             <Text style={styles.label}>出力する範囲</Text>
-            <Segment value={paceExportMode} values={["5km目安", "全距離"]} onChange={(value) => setPaceExportMode(value as PaceExportMode)} />
-            <Text style={styles.helpText}>{paceExportMode === "5km目安" ? "大会当日に見やすいよう、5km地点、関門、給水/停止、ゴールだけを出力します。" : "確認用として1kmごとの全行を出力します。印刷枚数は多くなります。"}</Text>
+            <Segment value={paceExportMode} values={["当日用", "3プラン比較", "全距離"]} onChange={(value) => setPaceExportMode(value as PaceExportMode)} />
+            <Text style={styles.helpText}>
+              {paceExportMode === "当日用"
+                ? "大会当日に見やすいよう、5km地点、関門、給水/停止、ゴールだけを出力します。"
+                : paceExportMode === "3プラン比較"
+                  ? "安全・標準・攻めるの3つを横並びにして、目標の違いを確認できます。"
+                  : "確認用として1kmごとの全行を出力します。印刷枚数は多くなります。"}
+            </Text>
+            {paceExportMode === "3プラン比較" && (
+              <View style={styles.comparisonPreview}>
+                {getPaceComparisonColumns().map((column) => (
+                  <Metric key={column.label} label={column.label} value={formatDuration(column.targetSec)} />
+                ))}
+              </View>
+            )}
             <View style={styles.rowGap}>
               <PrimaryButton label="CSV出力" onPress={exportCsv} />
               <SecondaryButton label="PDF出力" onPress={exportPdf} />
@@ -2626,6 +2746,7 @@ export default function App() {
 
   function renderPaceTable() {
     const selectedRunStyle = selectedPlan?.runStyle ?? migrateRunStyle(selectedPlan ?? {});
+    const raceDayRows = getCompactPaceRows();
     const showCheckpointSummary = raceGates.length > 0 && (
       (selectedPlan?.inputMode ?? "制限時間内で完走") === "制限時間内で完走" ||
       Boolean(selectedPlan?.showCheckpointDetails) ||
@@ -2658,6 +2779,30 @@ export default function App() {
           {raceStops.length ? raceStops.slice(0, 5).map((stop) => (
             <Text key={`pace-stop-${stop.id}`} style={styles.helpText}>給水/停止: {distanceLabel(stop.distanceKm)}km / +{stop.stopSec}秒 / {stop.memo || "停止"}</Text>
           )) : <Text style={styles.muted}>給水/停止は未登録です。</Text>}
+        </Card>
+        <Card>
+          <Text style={styles.sectionTitle}>当日用ペースカード</Text>
+          <Text style={styles.body}>大会中に見やすいよう、5km地点、関門、給水/停止、ゴールを中心に絞った一覧です。</Text>
+          {raceDayRows.length ? raceDayRows.map((row) => (
+            <View key={`race-day-${row.gate?.id ?? row.km}`} style={styles.raceDayRow}>
+              <View style={styles.raceDayMain}>
+                <Text style={styles.listTitle}>{row.gate ? `${row.gate.name} / ${distanceLabel(row.gate.distanceKm)}km` : Math.abs(row.km - n(selectedRace?.distanceKm ?? "0")) < 0.01 ? "ゴール" : `${distanceLabel(row.km)}km`}</Text>
+                <Text style={styles.muted}>通過予定 {row.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes)} / ペース {formatPace(row.adjustedLapSec)}</Text>
+                {!!row.stopMemo && <Text style={styles.helpText}>給水/停止: {row.stopMemo}</Text>}
+                {!!row.terrainMemo && <Text style={styles.helpText}>高低差: {row.terrainMemo}</Text>}
+              </View>
+              <View style={styles.raceDaySide}>
+                {row.gate ? (
+                  <>
+                    <Text style={[styles.metricValue, statusStyle(row.status)]}>{formatMinutesLabel(row.gateMarginSec)}</Text>
+                    <Badge label={row.status} />
+                  </>
+                ) : (
+                  <Text style={styles.metricValue}>{formatDuration(row.cumulativeSec)}</Text>
+                )}
+              </View>
+            </View>
+          )) : <Text style={styles.muted}>プランを作成すると表示されます。</Text>}
         </Card>
         <Card>
           <Text style={styles.sectionTitle}>5kmごとのペースプラン</Text>
@@ -3449,6 +3594,7 @@ const styles = StyleSheet.create({
   rowGap: { gap: 9 },
   buttonRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
   switchRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#fffdf8", borderWidth: 1, borderColor: "#ebe7dc", borderRadius: 8, padding: 12, marginTop: 8, marginBottom: 10 },
+  comparisonPreview: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 8, marginBottom: 10 },
   planPreview: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 2, marginBottom: 12 },
   segmentStack: { gap: 0, marginBottom: 2 },
   segment: { flexDirection: "row", backgroundColor: "#e8e3d8", borderRadius: 8, padding: 4, marginBottom: 14 },
@@ -3479,6 +3625,9 @@ const styles = StyleSheet.create({
   warningBadge: { backgroundColor: "#fff1c7", color: "#8a6200" },
   editingBadge: { backgroundColor: "#fff1c7", color: "#8a6200", fontSize: 11, fontWeight: "900", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   courseMiniCard: { backgroundColor: "#ffffff", borderWidth: 1, borderColor: "#ebe7dc", borderRadius: 8, padding: 10, marginBottom: 8 },
+  raceDayRow: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#f7faf7", borderWidth: 1, borderColor: "#dbe6df", borderRadius: 8, padding: 12, marginTop: 8 },
+  raceDayMain: { flex: 1 },
+  raceDaySide: { minWidth: 92, alignItems: "flex-end", gap: 5 },
   coursePaceRow: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#fffdf8", borderWidth: 1, borderColor: "#ebe7dc", borderRadius: 8, padding: 12, marginTop: 8 },
   coursePaceValue: { minWidth: 86, alignItems: "flex-end" },
   gateSummary: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: "#ebe7dc", paddingTop: 10, marginTop: 10 },
