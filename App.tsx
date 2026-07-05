@@ -1540,35 +1540,56 @@ export default function App() {
     const exportMode = normalizedExportMode();
     if (exportMode === "持ち出し用") {
       const exportRows = getCompactPaceRows();
+      const raceDistance = n(selectedRace?.distanceKm ?? "0");
+      const maxCardRows = raceDistance > 60 ? 12 : raceDistance > 30 ? 11 : 10;
+      const cardRows = exportRows
+        .map((row) => ({
+          row,
+          priority:
+            Math.abs(row.km - raceDistance) < 0.01 ? 0 :
+            row.gate ? 1 :
+            Math.abs(row.km % 5) < 0.01 ? 2 :
+            row.stopSec > 0 ? 3 :
+            row.terrainAdjustmentSec !== 0 ? 4 :
+            5
+        }))
+        .sort((a, b) => a.priority - b.priority || a.row.km - b.row.km)
+        .slice(0, maxCardRows)
+        .map((item) => item.row)
+        .sort((a, b) => a.km - b.km);
       let previousCumulativeSec = 0;
-      const raceDayRows = exportRows
+      const shortCheckMemo = (row: PaceRow) => {
+        const items = [
+          row.gate ? "関門" : "",
+          row.stopSec ? (row.stopMemo?.replace(/\s*\+\d+秒/g, "").replace(/\d+(?:\.\d+)?km\s*/g, "").trim() || "給水") : "",
+          row.terrainAdjustmentSec < 0 ? "下り" : row.terrainAdjustmentSec > 0 ? "上り" : "",
+          row.manual ? "手動" : ""
+        ].filter(Boolean);
+        return items.join(" / ") || "-";
+      };
+      const raceDayRows = cardRows
         .map((row) => {
           const intervalSec = Math.max(0, row.cumulativeSec - previousCumulativeSec);
           previousCumulativeSec = row.cumulativeSec;
-          const memoItems = [
-            row.gate ? `${row.gate.name}${row.gateMarginSec != null ? ` 余裕${formatMinutesLabel(row.gateMarginSec)}` : ""}` : "",
-            row.stopMemo ? `給水/停止 ${row.stopMemo}` : "",
-            row.terrainMemo ? `高低差 ${row.terrainMemo}` : "",
-            row.gate?.memo ?? "",
-            row.manual ? "手動調整" : ""
-          ].filter(Boolean);
-          return `<tr><td>${escapeHtml(Math.abs(row.km - n(selectedRace?.distanceKm ?? "0")) < 0.01 ? "ゴール" : `${distanceLabel(row.gate?.distanceKm ?? row.km)}km`)}</td><td>${escapeHtml(row.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes))}</td><td>${escapeHtml(formatDuration(intervalSec || row.adjustedLapSec))}</td><td>${escapeHtml(memoItems.join(" / ") || "-")}</td></tr>`;
+          return `<tr><td>${escapeHtml(Math.abs(row.km - raceDistance) < 0.01 ? "G" : `${distanceLabel(row.gate?.distanceKm ?? row.km)}k`)}</td><td>${escapeHtml(row.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes))}</td><td>${escapeHtml(formatDuration(intervalSec || row.adjustedLapSec).replace(/^00:/, ""))}</td><td>${escapeHtml(shortCheckMemo(row))}</td></tr>`;
         })
         .join("");
       const columns = getPaceComparisonColumns();
-      const points = comparisonPointLabels();
-      const headerCells = columns.map((column) => `<th>${escapeHtml(column.label)}<br>${escapeHtml(formatDuration(column.targetSec))}</th>`).join("");
-      const comparisonRows = points.map((point) => {
+      const comparisonPoints = comparisonPointLabels()
+        .filter((point) => point.km === 1 || Math.abs(point.km % 5) < 0.05 || point.label === "中間点" || point.label === "ゴール")
+        .slice(0, maxCardRows);
+      const headerCells = columns.map((column) => `<th>${escapeHtml(column.label)}<br>${escapeHtml(formatDuration(column.targetSec).replace(/^0/, ""))}</th>`).join("");
+      const comparisonRows = comparisonPoints.map((point) => {
         const cells = columns.map((column) => {
           const row = getComparisonRow(column.rows, point.km);
           return `<td>${escapeHtml(row?.etaMinutes == null ? "-" : addMinutesToClock("00:00", row.etaMinutes))}<br><span>${escapeHtml(row ? formatPace(row.adjustedLapSec) : "-")}</span></td>`;
         }).join("");
         return `<tr><td>${escapeHtml(point.label)}</td>${cells}</tr>`;
       }).join("");
-      const raceDayPanel = `<section class="panel"><h2>CHEBIS RUN</h2><p class="sub">RACE DAY</p><div class="race"><b>${escapeHtml(selectedRace?.name ?? "")}</b><br>目標 <strong>${escapeHtml(goalTimeLabel)}</strong> / 平均 <strong>${escapeHtml(formatPace(basePace))}</strong><br>開始 <strong>${escapeHtml(getRealStartTime(selectedRace))}</strong> / 関門余裕 最小<strong>${escapeHtml(formatMinutesLabel(minMargin))}</strong></div><table><thead><tr><th>距離</th><th>通過</th><th>区間</th><th>確認</th></tr></thead><tbody>${raceDayRows}</tbody></table></section>`;
-      const comparisonPanel = `<section class="panel"><h2>CHEBIS RUN</h2><p class="sub">3 PLAN</p><div class="race"><b>${escapeHtml(selectedRace?.name ?? "")}</b><br>安全・目標・攻めるの通過比較<br>ロス ${escapeHtml(selectedRace?.lostTimeMin ?? "0")}分 / 開始 ${escapeHtml(getRealStartTime(selectedRace))}</div><table class="compare"><thead><tr><th>距離</th>${headerCells}</tr></thead><tbody>${comparisonRows}</tbody></table></section>`;
-      const ticket = (label: string) => `<div class="ticket"><div class="ticketLabel">${label}</div><div class="foldLine"></div>${raceDayPanel}${comparisonPanel}<p class="foot">公式情報は大会前に必ず確認してください。完走を保証するものではありません。</p></div>`;
-      const html = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 portrait;margin:7mm}*{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#182426;margin:0}h1{font-size:9px;margin:0 0 2mm}.sheet{width:100%;display:flex;flex-direction:column;gap:4mm}.ticket{position:relative;height:132mm;border:1.4px solid #1b365d;padding:4mm;display:grid;grid-template-columns:1fr 1fr;column-gap:4mm;overflow:hidden;break-inside:avoid;page-break-inside:avoid}.ticket+.ticket{border-top-style:dashed}.ticketLabel{position:absolute;right:3mm;top:2mm;color:#1b365d;font-size:7px;font-weight:800}.foldLine{position:absolute;top:0;bottom:0;left:50%;border-left:1px dashed #8aa0b8}.panel{min-width:0}.panel h2{font-size:12.5px;line-height:1;margin:0;color:#1b365d;letter-spacing:.2px}.sub{font-size:6.6px;font-weight:800;color:#1b365d;margin:.6mm 0 1.1mm}.race{background:#f2f0ea;padding:1.1mm;font-size:6.2px;line-height:1.28;margin-bottom:1.2mm}table{width:100%;border-collapse:collapse;font-size:6.1px;table-layout:fixed}th,td{border:1px solid #1b365d;padding:.72mm .42mm;text-align:left;vertical-align:top;line-height:1.16;overflow-wrap:break-word}th{background:#e7eee9;color:#1b365d;font-weight:900}.panel table th:first-child,.panel table td:first-child{width:10.6mm;white-space:nowrap;font-weight:800}.panel table th:nth-child(2),.panel table td:nth-child(2){width:11mm;white-space:nowrap;font-weight:800}.panel table th:nth-child(3),.panel table td:nth-child(3){width:13mm;white-space:nowrap}.compare th,.compare td{padding:.66mm .38mm}.compare th:first-child,.compare td:first-child{width:11.5mm;white-space:nowrap;font-weight:900}.compare span{color:#60706a;font-size:5.25px}.foot{position:absolute;left:4mm;right:4mm;bottom:2.2mm;font-size:5.5px;color:#60706a;line-height:1.2;margin:0}.ticket:first-child::after{content:"";position:absolute;left:-2mm;right:-2mm;bottom:-2mm;border-bottom:1px dashed #8aa0b8}@media print{body{margin:0}tr{break-inside:avoid}.ticket{break-inside:avoid;page-break-inside:avoid}}</style></head><body><h1>RUN Finish Planner / レース本番用短冊</h1><div class="sheet">${ticket("本番用")}${ticket("控え")}</div></body></html>`;
+      const raceDayPanel = `<section class="panel"><h2>CHEBIS RUN</h2><p class="sub">RACE DAY</p><div class="race"><b>${escapeHtml(selectedRace?.name ?? "")}</b><br>目標 <strong>${escapeHtml(goalTimeLabel)}</strong> / 平均 <strong>${escapeHtml(formatPace(basePace))}</strong><br>開始 <strong>${escapeHtml(getRealStartTime(selectedRace))}</strong> / 余裕 最小<strong>${escapeHtml(formatMinutesLabel(minMargin))}</strong></div><table><thead><tr><th>距離</th><th>通過</th><th>区間</th><th>確認</th></tr></thead><tbody>${raceDayRows}</tbody></table></section>`;
+      const comparisonPanel = `<section class="panel"><h2>CHEBIS RUN</h2><p class="sub">3 PLAN</p><div class="race"><b>${escapeHtml(selectedRace?.name ?? "")}</b><br>安全・目標・攻める / 開始 ${escapeHtml(getRealStartTime(selectedRace))}</div><table class="compare"><thead><tr><th>距離</th>${headerCells}</tr></thead><tbody>${comparisonRows}</tbody></table></section>`;
+      const ticket = (label: string) => `<div class="ticket"><div class="ticketLabel">${label}</div><div class="foldLine"></div>${raceDayPanel}${comparisonPanel}<p class="foot">公式情報は大会前に必ず確認。完走保証ではありません。</p></div>`;
+      const html = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 portrait;margin:10mm 7mm}*{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#182426;margin:0}h1{font-size:8px;margin:0 0 3mm;color:#1b365d}.sheet{width:100%;display:flex;flex-direction:column;align-items:center;gap:12mm}.ticket{position:relative;width:182mm;height:55mm;border:1px solid #1b365d;padding:2.6mm;display:grid;grid-template-columns:91mm 91mm;column-gap:0;overflow:hidden;break-inside:avoid;page-break-inside:avoid}.ticket+.ticket{margin-top:2mm}.ticketLabel{position:absolute;right:2mm;top:1.8mm;color:#1b365d;font-size:5.6px;font-weight:900}.foldLine{position:absolute;top:-1mm;bottom:-1mm;left:50%;border-left:1px dashed #8aa0b8}.ticket:first-child::after{content:"切り取り";position:absolute;left:0;right:0;bottom:-7mm;border-bottom:1px dashed #8aa0b8;text-align:center;color:#8aa0b8;font-size:5px}.panel{min-width:0;padding:0 2.2mm}.panel h2{font-size:8.2px;line-height:1;margin:0;color:#1b365d;letter-spacing:.2px}.sub{font-size:4.6px;font-weight:900;color:#1b365d;margin:.45mm 0 .8mm}.race{background:#f2f0ea;padding:.8mm;font-size:4.9px;line-height:1.22;margin-bottom:.8mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}table{width:100%;border-collapse:collapse;font-size:4.95px;table-layout:fixed}th,td{border:.65px solid #1b365d;padding:.45mm .32mm;text-align:left;vertical-align:middle;line-height:1.08;overflow:hidden;text-overflow:ellipsis}th{background:#e7eee9;color:#1b365d;font-weight:900}.panel table th:first-child,.panel table td:first-child{width:8.5mm;white-space:nowrap;font-weight:900}.panel table th:nth-child(2),.panel table td:nth-child(2){width:9.6mm;white-space:nowrap;font-weight:900}.panel table th:nth-child(3),.panel table td:nth-child(3){width:10.7mm;white-space:nowrap}.compare th,.compare td{padding:.42mm .28mm}.compare th:first-child,.compare td:first-child{width:9.5mm;white-space:nowrap;font-weight:900}.compare span{color:#60706a;font-size:4.2px}.foot{position:absolute;left:3mm;right:3mm;bottom:1.2mm;font-size:4.3px;color:#60706a;line-height:1.1;margin:0}@media print{body{margin:0}tr{break-inside:avoid}.ticket{break-inside:avoid;page-break-inside:avoid}}</style></head><body><h1>RUN Finish Planner / レース本番用 名刺二つ折り</h1><div class="sheet">${ticket("本番用")}${ticket("控え")}</div></body></html>`;
       if (Platform.OS === "web") {
         const web = globalThis as any;
         const win = web.open("", "_blank");
