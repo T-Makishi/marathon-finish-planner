@@ -1561,7 +1561,7 @@ export default function App() {
       const shortCheckMemo = (row: PaceRow) => {
         const items = [
           row.gate ? "関門" : "",
-          row.stopSec ? (row.stopMemo?.replace(/\s*\+\d+秒/g, "").replace(/\d+(?:\.\d+)?km\s*/g, "").trim() || "給水") : "",
+          row.stopSec ? "給水" : "",
           row.terrainAdjustmentSec < 0 ? "下り" : row.terrainAdjustmentSec > 0 ? "上り" : "",
           row.manual ? "手動" : ""
         ].filter(Boolean);
