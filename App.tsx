@@ -1031,6 +1031,19 @@ export default function App() {
   const updateStore = (next: Store) => setStore(next);
   const selectRace = (id: string) => updateStore({ ...store, selectedRaceId: id, races: store.races.map((race) => (race.id === id ? { ...race, lastUsedAt: Date.now() } : race)) });
   const raceOptions = store.races.length ? store.races : [];
+  const selectNextRaceFromHero = () => {
+    if (!raceOptions.length) {
+      setTab("大会");
+      return;
+    }
+    if (raceOptions.length === 1) {
+      Alert.alert("大会は1件です", "大会タブで別の大会を追加すると、ここから切り替えできます。");
+      return;
+    }
+    const currentIndex = Math.max(0, raceOptions.findIndex((race) => race.id === selectedRaceId));
+    const nextRace = raceOptions[(currentIndex + 1) % raceOptions.length];
+    selectRace(nextRace.id);
+  };
 
   function saveRace() {
     if (!raceForm.name.trim()) return Alert.alert("入力不足", "大会名を入力してください。");
@@ -1807,7 +1820,14 @@ export default function App() {
                 <Text style={styles.darkRaceMeta}>大会登録タブから追加してください</Text>
               )}
             </View>
-            <Text style={styles.raceFocusArrow}>›</Text>
+            <Pressable
+              onPress={selectNextRaceFromHero}
+              accessibilityRole="button"
+              accessibilityLabel="次の対象大会へ切り替え"
+              style={({ pressed }) => [styles.raceFocusArrowButton, pressed && styles.pressed]}
+            >
+              <Text style={styles.raceFocusArrow}>›</Text>
+            </Pressable>
           </View>
 
           <View style={styles.homeRaceSelector}>
@@ -3488,7 +3508,9 @@ const styles = StyleSheet.create({
   raceFocusImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
   raceFocusShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.48)" },
   raceFocusContent: { position: "relative", zIndex: 1, maxWidth: "82%" },
-  raceFocusArrow: { position: "absolute", right: 16, top: "46%", zIndex: 2, color: "rgba(255,255,255,0.90)", fontSize: 36, lineHeight: 40, fontWeight: "300" },
+  pressed: { opacity: 0.72 },
+  raceFocusArrowButton: { position: "absolute", right: 12, top: "38%", zIndex: 2, width: 54, height: 54, borderRadius: 27, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.10)" },
+  raceFocusArrow: { color: "rgba(255,255,255,0.92)", fontSize: 42, lineHeight: 46, fontWeight: "300" },
   homeRaceSelector: { backgroundColor: "rgba(255,255,255,0.86)", borderRadius: 8, padding: 12, borderWidth: 1, borderColor: "rgba(44,54,50,0.12)", gap: 8 },
   darkLabel: { color: "#ffffff", fontSize: 13, fontWeight: "900", marginBottom: 8 },
   darkRaceTitle: { color: "#ffffff", fontSize: 23, lineHeight: 29, fontWeight: "900" },
