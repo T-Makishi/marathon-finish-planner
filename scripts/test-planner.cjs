@@ -69,6 +69,7 @@ const kv = () => {
   return {
     map,
     getItem: async (k) => map.get(k) ?? null,
+    removeItem: async (k) => { map.delete(k); },
     setItem: async (k, v) => {
       map.set(k, v);
     },
@@ -317,23 +318,23 @@ test("invalid comparison prevents printing", () =>
       }),
     ).length,
   ));
-test("supplemental pages preserve nearby gates without splitting carry card", () => {
+test("nearby gates appear in carry cards with pagination and supplemental details", () => {
   const p = plan({
     gates: [gate(10.1, "12:00"), gate(10.2, "12:00")],
     stops: [stop(12.3, 30)],
     cardGates: true,
   });
   const points = displayPoints(p);
-  assert.equal(points.length, 11);
-  assert.equal(buildPrintLayout(p).cardCount, 1);
+  assert.equal(points.length, 13);
+  assert.equal(buildPrintLayout(p).cardCount, 2);
   assert.equal(buildPrintLayout(p).detailCount, 2);
   const html = buildCardHtml(p);
   assert.ok(html.includes("関門10.1"));
   assert.ok(html.includes("関門10.2"));
   assert.ok(html.includes("12.3km"));
 });
-test("legacy review required before export", () =>
-  assert.ok(exportProblems(plan({ migrationNotes: ["確認必要"] })).length));
+test("obsolete migration notice does not block printing", () =>
+  assert.equal(exportProblems(plan({ migrationNotes: ["確認必要"] })).length, 0));
 test("backup roundtrip preserves every setting", () => {
   const s = newStore();
   assert.deepEqual(parseBackup(JSON.stringify(s)), s);
@@ -423,7 +424,7 @@ test("restore preimage is available independently", async () => {
   assert.deepEqual(await repo.previousRestore(), old);
   assert.deepEqual((await repo.load()).store, next);
 });
-test("migration preserves exact raw string before new save", async () => {
+test("migration removes obsolete originals only after verified current copies", async () => {
   const db = kv();
   const original = JSON.stringify({
     races: [],
@@ -433,8 +434,10 @@ test("migration preserves exact raw string before new save", async () => {
   db.map.set(LEGACY_KEY, original);
   const repo = createRepository(db);
   await repo.load();
-  assert.equal(db.map.get(LEGACY_KEY), original);
-  assert.equal(db.map.get("run-finish-planner-v2-legacy-original"), original);
+  assert.equal(db.map.has(LEGACY_KEY), false);
+  assert.equal(db.map.has("run-finish-planner-v2-legacy-original"), false);
+  assert.equal((await repo.load()).store.legacyArchive, null);
+  assert.ok(db.map.has("run-finish-planner-v2-a") && db.map.has("run-finish-planner-v2-b"));
 });
 test("stale second repository cannot overwrite a newer plan", async () => {
   const db = kv(),
@@ -681,6 +684,53 @@ test('both card footers use calculated averages and explicit course correction s
   assert.ok(html.includes(`移動平均 ${paceText(calculate(p).averagePace)}/km`));
   assert.ok(buildCardHtml({ ...p, elevation: false }).includes('コース補正：OFF'));
   assert.ok(buildCardHtml({ ...p, terrain: [] }).includes('コース補正：未設定'));
+});
+test('cleanup failure retains old source and usable current plans retain settings', async () => {
+  const db = kv(); const raw = JSON.stringify({ races: [{ id: 'r', name: '大会', distanceKm: '21.442' }], plans: [] });
+  db.map.set(LEGACY_KEY, raw);
+  db.setItem = async () => { throw new Error('quota'); };
+  await assert.rejects(createRepository(db).load());
+  assert.equal(db.map.get(LEGACY_KEY), raw);
+  const { compactStore } = require('../src/planner/storage.ts');
+  const old = newStore(); old.legacyArchive = { trainingRecords: 'x'.repeat(10000) };
+  old.snapshots = [{ id: 's', createdAt: '', plan: old.plans[0], html: 'x'.repeat(10000) }];
+  old.plans[0].migrationNotes = ['旧案内'];
+  const clean = compactStore(old);
+  assert.equal(clean.plans[0].id, old.plans[0].id);
+  assert.equal(clean.plans[0].target, old.plans[0].target);
+  assert.equal(clean.snapshots.length, 0);
+  assert.equal(clean.legacyArchive, null);
+  assert.ok(JSON.stringify(clean).length < JSON.stringify(old).length / 5);
+});
+test('carry cards always show exact gate distances and deadlines on both faces', () => {
+  const p = plan({ distance: '21.442', target: '2:50:00', timeBasis: 'gun', delayMinutes: '10', cardClock: 'gun', comparison: ['2:40:00','3:00:00','3:10:00'], cardMode: 'both', cardGates: false, gates: [gate(13,'11:00')] });
+  const html = buildCardHtml(p);
+  assert.equal((html.match(/class="gate-deadline">関門 11:00/g) || []).length, 2);
+  assert.equal(displayPoints(p).filter(x => x === 13000000).length, 1);
+  assert.ok(html.includes('ネット<br>2:40:00'));
+  assert.ok(html.includes('class="finish-pair"'));
+  const matching = { ...p, gates: [gate(10,'11:00')] };
+  assert.equal(displayPoints(matching).filter(x => x === 10000000).length, 1);
+});
+test('existing v2 cleanup rewrites both copies, preserves opening image and clears source keys', async () => {
+  const { digest } = require('../src/planner/storage.ts');
+  const db = kv(), original = newStore();
+  const image = 'data:image/png;base64,iVBORw0KGgo=';
+  original.legacyArchive = { settings: { openingBackgroundUri: image }, trainingRecords: ['unused'] };
+  original.plans[0].name = '旧版からの移行';
+  original.plans[0].migrationNotes = ['確認'];
+  const payload = JSON.stringify(original);
+  db.map.set('run-finish-planner-v2-a', JSON.stringify({ generation: 1, payload, digest: digest(payload) }));
+  db.map.set('run-finish-planner-v2-legacy-original', 'old raw');
+  db.map.set('run-finish-planner-v2-before-restore', payload);
+  const repo = createRepository(db), loaded = await repo.load();
+  assert.equal(loaded.notice, '');
+  assert.equal(loaded.store.settings.openingBackground, image);
+  assert.equal(loaded.store.plans[0].name, 'プランA');
+  assert.equal(loaded.store.plans[0].migrationNotes.length, 0);
+  for (const slot of ['a','b']) assert.equal(JSON.parse(JSON.parse(db.map.get(`run-finish-planner-v2-${slot}`)).payload).legacyArchive, null);
+  assert.equal((await repo.previousRestore()).legacyArchive, null);
+  assert.equal(db.map.has('run-finish-planner-v2-legacy-original'), false);
 });
 (async () => {
   let failed = 0;

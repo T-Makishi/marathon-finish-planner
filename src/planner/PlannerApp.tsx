@@ -294,7 +294,7 @@ function Planner() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [saved]);
   const plan = store?.plans.find((p) => p.id === store.selectedId);
-  const openingBackground = store?.settings !== undefined ? store.settings.openingBackground : (store?.legacyArchive as { settings?: { openingBackgroundUri?: string } } | null)?.settings?.openingBackgroundUri;
+  const openingBackground = store?.settings?.openingBackground;
   const filteredRaces = useMemo(() => filterRaces(OFFICIAL_RACE_DATA, prefecture, category, search), [prefecture, category, search]);
   const result = useMemo(() => (plan ? calculate(plan) : null), [plan]);
   async function saveCourse() {
@@ -503,16 +503,6 @@ function Planner() {
                 </Text>
               </View>
             </View>
-            {!!plan.migrationNotes.length && (
-              <Panel title="旧版から引き継いだ計画">
-                <Messages items={plan.migrationNotes} />
-                <Button
-                  title="内容を確認済みにする"
-                  secondary
-                  onPress={() => edit("migrationNotes", [])}
-                />
-              </Panel>
-            )}
             {undo && undo.id === plan.id && (
               <Button
                 title="直前の行削除を元に戻す"
@@ -1235,12 +1225,12 @@ function Planner() {
                     <Button title="本番案の目標を本命にして±5分で設定" secondary onPress={() => { const seconds = plan.timeBasis === "gun" ? result.actualGun : result.actualNet; if (Number.isFinite(seconds) && seconds > 300) edit("comparison", [elapsed(seconds - 300), elapsed(seconds), elapsed(seconds + 300)]); }} />
                   </>}
                   {plan.cardMode === "single" ? <Choices value={plan.cardFormat} options={[{ id: "pocket", label: "ポケット 85 × 135mm" }, { id: "wrist", label: "手首用 50 × 180mm" }]} onChange={v => edit("cardFormat", v)} /> : <Text style={s.body}>サイズ：85 × 135mm（比較の3列が読めるポケットサイズ）</Text>}
-                  <Text style={s.hint}>フルマラソンの主要11地点を1枚に収めます。「本番案＋3案比較」は表裏の2面をつなげて印刷します。外周だけを切り取り、中央は切らず、印刷面を外側にして山折りします。</Text>
+                  <Text style={s.hint}>主要地点と登録した関門を表示し、地点が多い場合は複数枚に分けます。「本番案＋3案比較」は表裏の2面をつなげて印刷します。外周だけを切り取り、中央は切らず、印刷面を外側にして山折りします。</Text>
                   <Choices value={plan.cardClock} options={[{ id: "net", label: "ネット累計で印刷" }, { id: "gun", label: "号砲からの累計で印刷" }]} onChange={v => edit("cardClock", v)} />
                   <Text style={s.body}>本番案の印刷ゴール：{elapsed(printedTotal(plan, result))}（{plan.cardClock === "net" ? "ネット" : "号砲から"}）</Text>
                 </Panel>
                 <Panel title="2. 必要な追加資料だけ選ぶ">
-                  <Text style={s.hint}>追加資料はA4の別ページです。携帯カードに細かい説明を詰め込みません。以前の「載せる」設定は、別紙の選択として引き継いでいます。</Text>
+                  <Text style={s.hint}>登録した関門は携帯カードに表示します。詳細な確認表・補給・補正の設定は、必要な場合に別紙を追加できます。</Text>
                   <Toggle label="関門・制限時間の確認表を追加" value={plan.cardGates} onChange={v => edit("cardGates", v)} />
                   <Toggle label="補給・停止の計画を追加" value={plan.cardNotes} onChange={v => edit("cardNotes", v)} hint={plan.stops.length ? `${plan.stops.length}件の停止を別紙に印刷します。` : "停止が未登録のため、追加ページは作りません。"} />
                   <Toggle label="コース補正の設定表を追加" value={plan.cardTerrain} onChange={v => edit("cardTerrain", v)} hint={plan.terrain.length ? `${plan.terrain.length}区間の設定を別紙に印刷します。` : "補正区間が未登録のため、追加ページは作りません。"} />
@@ -1363,7 +1353,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.1.7</Text>
+              <Text style={s.body}>RUN Finish Planner 2.1.8</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary
@@ -1462,7 +1452,7 @@ function Planner() {
                 Pagesを使用し、配信事業者がアクセス時のIPアドレスなどを処理する場合があります。外部サイトを開くと、そのサイトの方針が適用されます。
               </Text>
               <Text style={s.body}>
-                バックアップ、印刷、共有は利用者が操作したときに行います。共有先・保管先は利用者が選択します。削除済みの計画、復元前のコピー、旧版データも端末に残ります。完全に消去するには、このサイトの保存データをブラウザ設定から消去するか、iOSアプリを削除してください。外部に保存したファイルは別途削除してください。
+                バックアップ、印刷、共有は利用者が操作したときに行います。共有先・保管先は利用者が選択します。削除済みの計画と復元前のコピーは端末に残ります。不要な旧データと印刷履歴は整理されます。完全に消去するには、このサイトの保存データをブラウザ設定から消去するか、iOSアプリを削除してください。外部に保存したファイルは別途削除してください。
               </Text>
 
               <Text style={s.hint}>2026年9月12日 / PCSAPO / マキシ企画</Text>

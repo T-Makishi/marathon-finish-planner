@@ -1,4 +1,4 @@
-import { validSettings } from "./settings";
+import { validSettings, validOpeningImage } from "./settings";
 import {
   Plan,
   PlannerStore,
@@ -14,6 +14,7 @@ export const MAX_BACKUP_BYTES = 20 * 1024 * 1024;
 type KV = {
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
+  removeItem?(key: string): Promise<void>;
 };
 type Envelope = { generation: number; digest: string; payload: string };
 export function digest(text: string): string {
@@ -210,13 +211,24 @@ export function migrateLegacy(raw: unknown): PlannerStore {
     store.plans[0].id;
   return store;
 }
+/** Keep usable plans/settings; discard obsolete duplicated data after conversion. */
+export function compactStore(store: PlannerStore): PlannerStore {
+  const cleanPlan = (p: Plan): Plan => ({ ...p,
+    name: /^(旧版からの移行|9番から引き継ぎ)$/.test(p.name) ? 'プランA' : p.name,
+    sourceStatus: /^旧版/.test(p.sourceStatus) ? '入力した大会情報' : p.sourceStatus,
+    migrationNotes: [],
+  });
+  const image = (store.legacyArchive as { settings?: { openingBackgroundUri?: unknown } } | null)?.settings?.openingBackgroundUri;
+  const settings = store.settings ?? (validOpeningImage(image) ? { openingBackground: image } : undefined);
+  return { ...store, ...(settings ? { settings } : {}), plans: store.plans.map(cleanPlan), trash: store.trash.map(cleanPlan), snapshots: [], legacyArchive: null };
+}
 export function parseBackup(text: string): PlannerStore {
   if (new TextEncoder().encode(text).length > MAX_BACKUP_BYTES)
     throw new Error("バックアップは20MB以下にしてください。");
   const raw = JSON.parse(text);
-  if (object(raw) && raw.schemaVersion === 2) return parseStore(text);
+  if (object(raw) && raw.schemaVersion === 2) return compactStore(parseStore(text));
   if (object(raw) && Array.isArray(raw.races) && Array.isArray(raw.plans))
-    return migrateLegacy(raw);
+    return compactStore(migrateLegacy(raw));
   throw new Error("RUN Finish PlannerのバックアップJSONを選択してください。");
 }
 export function createRepository(kv: KV) {
@@ -263,6 +275,33 @@ export function createRepository(kv: KV) {
       throw new Error("保存内容を確認できませんでした。");
     knownGeneration = generation;
   };
+  async function finishCleanup(store: PlannerStore, force = false): Promise<PlannerStore> {
+    return typeof navigator !== 'undefined' && navigator.locks
+      ? navigator.locks.request(PREFIX, () => cleanupNow(store, force))
+      : cleanupNow(store, force);
+  }
+  async function cleanupNow(store: PlannerStore, force: boolean): Promise<PlannerStore> {
+    const clean = compactStore(store);
+    const obsolete = [LEGACY_KEY, `${PREFIX}-legacy-original`];
+    const oldValues = await Promise.all(obsolete.map(key => kv.getItem(key)));
+    const previous = await kv.getItem(`${PREFIX}-before-restore`);
+    const changed = JSON.stringify(clean) !== JSON.stringify(store);
+    if (force || changed || oldValues.some(Boolean)) {
+      await saveNow(JSON.stringify(clean));
+      await saveNow(JSON.stringify(clean));
+      if (kv.removeItem) for (const key of obsolete) await kv.removeItem(key);
+    }
+    if (previous) {
+      try {
+        const trimmed = JSON.stringify(compactStore(parseStore(previous)));
+        if (trimmed !== previous) {
+          await kv.setItem(`${PREFIX}-before-restore`, trimmed);
+          if (await kv.getItem(`${PREFIX}-before-restore`) !== trimmed) throw new Error('復元用コピーの保存を確認できません。');
+        }
+      } catch (e) { /* An unreadable recovery copy is retained, never silently deleted. */ }
+    }
+    return clean;
+  }
   return {
     async load(): Promise<{ store: PlannerStore; notice: string }> {
       const [a, b, rawA, rawB] = await Promise.all([
@@ -277,7 +316,7 @@ export function createRepository(kv: KV) {
       if (latest) {
         knownGeneration = latest.generation;
         return {
-          store: parseStore(latest.payload),
+          store: await finishCleanup(parseStore(latest.payload), [a, b].some(e => e && JSON.stringify(compactStore(parseStore(e.payload))) !== e.payload)),
           notice:
             (rawA && !a) || (rawB && !b)
               ? "保存データの予備コピーから回復しました。バックアップを保存してください。"
@@ -291,19 +330,12 @@ export function createRepository(kv: KV) {
       knownGeneration = 0;
       const legacy = await kv.getItem(LEGACY_KEY);
       if (legacy) {
-        await kv.setItem(`${PREFIX}-legacy-original`, legacy);
-        if ((await kv.getItem(`${PREFIX}-legacy-original`)) !== legacy)
-          throw new Error("旧データの退避に失敗しました。");
-        return {
-          store: migrateLegacy(JSON.parse(legacy)),
-          notice:
-            "旧版のデータを保護して移行しました。各プランの内容を確認してください。",
-        };
+        return { store: await finishCleanup(migrateLegacy(JSON.parse(legacy))), notice: '' };
       }
       return { store: newStore(), notice: "" };
     },
     save(store: PlannerStore): Promise<void> {
-      const payload = JSON.stringify(store);
+      const payload = JSON.stringify(compactStore(store));
       const task = queue
         .catch(() => {})
         .then(() =>
@@ -315,14 +347,14 @@ export function createRepository(kv: KV) {
       return task;
     },
     async preserveBeforeRestore(store: PlannerStore) {
-      const value = JSON.stringify(store);
+      const value = JSON.stringify(compactStore(store));
       await kv.setItem(`${PREFIX}-before-restore`, value);
       if ((await kv.getItem(`${PREFIX}-before-restore`)) !== value)
         throw new Error("復元前の退避に失敗しました。");
     },
     async previousRestore() {
       const text = await kv.getItem(`${PREFIX}-before-restore`);
-      return text ? parseStore(text) : null;
+      return text ? compactStore(parseStore(text)) : null;
     },
     async rawRecovery() {
       return JSON.stringify(
