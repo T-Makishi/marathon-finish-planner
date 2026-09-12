@@ -242,6 +242,7 @@ function Planner() {
   } | null>(null);
   const [busy, setBusy] = useState(false),
     [undo, setUndo] = useState<Plan | null>(null);
+  const purgingTrash = useRef(false);
   const current = useRef(store),
     scroll = useRef<ScrollView>(null),
     generation = useRef(0);
@@ -260,6 +261,7 @@ function Planner() {
     const seq = ++generation.current;
     setSaved("保存中…");
     const timer = setTimeout(() => {
+      if (purgingTrash.current || current.current !== store) return;
       repository
         .save(store)
         .then(() => {
@@ -276,7 +278,7 @@ function Planner() {
   }, [store]);
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
-      if (state !== "active" && current.current)
+      if (state !== "active" && current.current && !purgingTrash.current)
         repository.save(current.current).catch((e) => {
           setSaved("保存できません");
           setNotice(e.message);
@@ -359,10 +361,14 @@ function Planner() {
       body: `${description}を完全に削除します。この操作は取り消せません。端末内の復元用コピーからも除きます。外部に保存したバックアップは残ります。`,
       action: async () => {
         if (!current.current) return;
-        const clean = await repository.purgeTrash(current.current, ids);
-        setStore(clean);
-        setUndo(null);
-        setNotice('削除済みの計画を完全に削除しました。');
+        purgingTrash.current = true;
+        try {
+          const clean = await repository.purgeTrash(current.current, ids);
+          current.current = clean;
+          setStore(clean);
+          setUndo(null);
+          setNotice('削除済みの計画を完全に削除しました。');
+        } finally { purgingTrash.current = false; }
       },
     });
   }
