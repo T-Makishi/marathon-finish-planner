@@ -1193,7 +1193,7 @@ function Planner() {
                     <Button title="本番案の目標を本命にして±5分で設定" secondary onPress={() => { const seconds = plan.timeBasis === "gun" ? result.actualGun : result.actualNet; if (Number.isFinite(seconds) && seconds > 300) edit("comparison", [elapsed(seconds - 300), elapsed(seconds), elapsed(seconds + 300)]); }} />
                   </>}
                   {plan.cardMode === "single" ? <Choices value={plan.cardFormat} options={[{ id: "pocket", label: "ポケット 85 × 135mm" }, { id: "wrist", label: "手首用 50 × 180mm" }]} onChange={v => edit("cardFormat", v)} /> : <Text style={s.body}>サイズ：85 × 135mm（比較の3列が読めるポケットサイズ）</Text>}
-                  <Text style={s.hint}>フルマラソンの主要11地点を1枚に収めます。「本番案＋3案比較」は同じ大きさの2枚をA4の1ページに並べます。</Text>
+                  <Text style={s.hint}>フルマラソンの主要11地点を1枚に収めます。「本番案＋3案比較」は表裏の2面をつなげて印刷します。外周だけを切り取り、中央は切らず、印刷面を外側にして山折りします。</Text>
                   <Choices value={plan.cardClock} options={[{ id: "net", label: "ネット累計で印刷" }, { id: "gun", label: "号砲からの累計で印刷" }]} onChange={v => edit("cardClock", v)} />
                   <Text style={s.body}>本番案の印刷ゴール：{elapsed(printedTotal(plan, result))}（{plan.cardClock === "net" ? "ネット" : "号砲から"}）</Text>
                 </Panel>
@@ -1208,7 +1208,7 @@ function Planner() {
                 <Panel title="3. 印刷される内容を確認">
                   <Text style={s.heading}>A4縦 {printLayout?.pages.length || 0}ページ</Text>
                   <Text style={s.body}>携帯カード {printLayout?.cardCount || 0}枚 ／ 追加資料 {printLayout?.detailCount || 0}ページ</Text>
-                  <Text style={s.hint}>{printLayout?.width} × {printLayout?.height}mm。点線が切り取り線です。</Text>
+                  <Text style={s.hint}>{plan.cardMode === "both" ? "広げて170 × 135mm → 二つ折りで85 × 135mm。外周の破線は切り取り線、中央の実線は折り線（切らない）です。" : `${printLayout?.width} × ${printLayout?.height}mm。外周の破線が切り取り線です。`}</Text>
                   <PrintPreview plan={plan} />
                 </Panel>
                 <Button
@@ -1321,7 +1321,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.1.1</Text>
+              <Text style={s.body}>RUN Finish Planner 2.1.2</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary

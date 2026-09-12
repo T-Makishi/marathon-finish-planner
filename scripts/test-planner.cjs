@@ -495,7 +495,7 @@ test("marathon carry cards keep all eleven points on one A4 page", () => {
 test("main and comparison have matching dimensions even for saved wrist setting", () => {
   const layout = buildPrintLayout(plan({ cardMode: 'both', cardFormat: 'wrist', cardGates: false, cardNotes: false, cardTerrain: false }));
   assert.equal(layout.pages.length, 1);
-  assert.equal(layout.cardCount, 2);
+  assert.equal(layout.cardCount, 1);
   assert.ok(layout.pages[0].cards.every(c => c.width === 85 && c.height === 135 && c.points.length === 11));
 });
 test("gun heading matches finish row with fifteen minute start delay", () => {
@@ -601,6 +601,25 @@ test('comparison goals have consistent labels and require ascending target times
   }
   assert.ok(!exportProblems(p).some(e => e.includes('順にタイムを長く')));
   assert.ok(!exportProblems({ ...p, cardMode: 'single', comparison: ['3:35:00','3:30:00','3:25:00'] }).some(e => e.includes('順にタイムを長く')));
+});
+test('folded cards pair matching sections and use one external cutting boundary', () => {
+  const p = plan({ cardMode: 'both', cardGates: true, gates: [gate(20, '13:00')] });
+  const layout = buildPrintLayout(p);
+  assert.equal(layout.cardCount, 1);
+  assert.equal(layout.pages[0].folded, true);
+  assert.deepEqual(layout.pages[0].cards.map(c => c.kind), ['single', 'compare']);
+  const html = buildCardHtml(p);
+  assert.equal((html.match(/class="fold-card"/g) || []).length, 1);
+  assert.equal((html.match(/class="fold-line"/g) || []).length, 1);
+  assert.ok(html.includes('折り線・切らない'));
+  assert.ok(html.includes('class="detail gate-table"'));
+  for (const page of buildPrintLayout(plan({ cardMode: 'both', distance: '100' })).pages) {
+    if (page.kind === 'cards') {
+      assert.deepEqual(page.cards.map(c => c.kind), ['single','compare']);
+      assert.deepEqual(page.cards[0].points, page.cards[1].points);
+    }
+  }
+  assert.ok(!buildPrintLayout(plan({ cardMode: 'compare' })).pages[0].folded);
 });
 (async () => {
   let failed = 0;
