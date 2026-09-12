@@ -185,6 +185,18 @@ function Panel({
     </View>
   );
 }
+function FoldPanel({ title, summary, open, onToggle, children }: {
+  title: string; summary: string; open: boolean; onToggle: () => void; children: React.ReactNode;
+}) {
+  return <View style={s.panel}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${title}：${summary}`} accessibilityState={{ expanded: open }} onPress={onToggle}
+      style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      <View style={{ flex: 1, gap: 6 }}><Text style={s.heading}>{title}</Text><Text style={s.hint}>{summary}</Text></View>
+      <Text style={s.heading}>{open ? '▴' : '▾'}</Text>
+    </Pressable>
+    {open && children}
+  </View>;
+}
 function Messages({
   items,
   error = false,
@@ -213,6 +225,10 @@ function Planner() {
   const [advanced, setAdvanced] = useState(false),
     [allRows, setAllRows] = useState(false);
   const [prefecture, setPrefecture] = useState(""), [category, setCategory] = useState(""), [expandedRace, setExpandedRace] = useState<string | null>(null), [plansExpanded, setPlansExpanded] = useState(false);
+  const [courseSections, setCourseSections] = useState({ gates: false, stops: false, terrain: false });
+  const [courseSaving, setCourseSaving] = useState(false);
+  const [courseSaveResult, setCourseSaveResult] = useState<{ snapshot: PlannerStore; message: string; error: boolean } | null>(null);
+  useEffect(() => { setCourseSections({ gates: false, stops: false, terrain: false }); }, [store?.selectedId]);
   const [selectedStart, setSelectedStart] = useState<Record<string, string>>({});
   const [catalog, setCatalog] = useState(false),
     [search, setSearch] = useState(""),
@@ -281,6 +297,24 @@ function Planner() {
   const openingBackground = store?.settings !== undefined ? store.settings.openingBackground : (store?.legacyArchive as { settings?: { openingBackgroundUri?: string } } | null)?.settings?.openingBackgroundUri;
   const filteredRaces = useMemo(() => filterRaces(OFFICIAL_RACE_DATA, prefecture, category, search), [prefecture, category, search]);
   const result = useMemo(() => (plan ? calculate(plan) : null), [plan]);
+  async function saveCourse() {
+    const snapshot = current.current;
+    if (!snapshot || courseSaving) return;
+    setCourseSaving(true);
+    setCourseSaveResult(null);
+    try {
+      await repository.save(snapshot);
+      if (current.current === snapshot) {
+        setSaved('端末に保存済み');
+        setCourseSaveResult({ snapshot, error: false, message: `この計画を保存しました（${new Date().toLocaleTimeString('ja-JP')}）` });
+      }
+    } catch (e) {
+      if (current.current === snapshot) {
+        setSaved('保存できません');
+        setCourseSaveResult({ snapshot, error: true, message: `保存できませんでした。再試行してください。${e instanceof Error ? e.message : String(e)}` });
+      }
+    } finally { setCourseSaving(false); }
+  }
   function edit<K extends keyof Plan>(key: K, value: Plan[K]) {
     setStore(
       (old) =>
@@ -594,7 +628,7 @@ function Planner() {
                       <Button
                         title="制限時間・関門を設定"
                         secondary
-                        onPress={() => move("大会")}
+                        onPress={() => { setCourseSections(old => ({ ...old, terrain: true })); move("大会"); }}
                       />
                     </>
                   )}
@@ -733,7 +767,7 @@ function Planner() {
                     <Button
                       title="区間ごとの補正を設定"
                       secondary
-                      onPress={() => move("大会")}
+                      onPress={() => { setCourseSections(old => ({ ...old, terrain: true })); move("大会"); }}
                     />
                   )}
                   {(plan.elevation || plan.style === "custom") &&
@@ -949,7 +983,7 @@ function Planner() {
                     />
                   )}
                 </Panel>
-                <Panel title="関門">
+                <FoldPanel title="関門" summary={`${plan.gates.length}地点`} open={courseSections.gates} onToggle={() => setCourseSections(old => ({ ...old, gates: !old.gates }))}>
                   {plan.gates.map((row, i) => (
                     <View style={s.editRow} key={row.id}>
                       <Field
@@ -1030,8 +1064,8 @@ function Planner() {
                   <Text style={s.hint}>
                     同じ1km区間内の複数関門も、それぞれの正確な距離で計算します。
                   </Text>
-                </Panel>
-                <Panel title="給水・補給などの停止">
+                </FoldPanel>
+                <FoldPanel title="給水・補給などの停止" summary={`${plan.stops.length}地点`} open={courseSections.stops} onToggle={() => setCourseSections(old => ({ ...old, stops: !old.stops }))}>
                   {plan.stops.map((row, i) => (
                     <View style={s.editRow} key={row.id}>
                       <View style={s.wrap}>
@@ -1087,8 +1121,8 @@ function Planner() {
                       ])
                     }
                   />
-                </Panel>
-                <Panel title="コースによるペース補正">
+                </FoldPanel>
+                <FoldPanel title="コースによるペース補正" summary={`${plan.terrain.length}区間 · 適用${plan.elevation ? "ON" : "OFF"}`} open={courseSections.terrain} onToggle={() => setCourseSections(old => ({ ...old, terrain: !old.terrain }))}>
                   <Text style={s.hint}>
                     例：上りで1kmあたり10秒遅くするなら10、下りで5秒速くするなら−5。高低差からの自動推定ではありません。
                   </Text>
@@ -1154,6 +1188,13 @@ function Planner() {
                     value={plan.elevation}
                     onChange={(v) => edit("elevation", v)}
                   />
+                </FoldPanel>
+                <Panel title="計画を保存">
+                  <Button title={courseSaving ? '保存中…' : 'この計画を保存'} disabled={courseSaving || busy} onPress={saveCourse} />
+                  <Text accessibilityLiveRegion="polite" style={[s.body, courseSaveResult?.snapshot === store && courseSaveResult.error && { color: '#992d22' }]}>
+                    {courseSaveResult?.snapshot === store ? courseSaveResult.message : saved}
+                  </Text>
+                  <Text style={s.hint}>入力内容は自動保存されます。ボタンを押すと、現在の内容を端末に保存して完了を確認できます。</Text>
                 </Panel>
                 <Button
                   title="この計画を削除済みに移す"
@@ -1322,7 +1363,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.1.6</Text>
+              <Text style={s.body}>RUN Finish Planner 2.1.7</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary
