@@ -8,3 +8,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .DS_Store
+dist-ios/
+.local-qa/
+ios/
+android/

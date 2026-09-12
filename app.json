@@ -2,18 +2,19 @@
   "expo": {
     "name": "RUN Finish Planner",
     "slug": "marathon-finish-planner",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
-      "backgroundColor": "#f6f3ee"
+      "backgroundColor": "#f5f6f1"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.local.marathonfinishplanner"
+      "bundleIdentifier": "com.local.marathonfinishplanner",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "buildNumber": "1"
     },
     "android": {
       "package": "com.local.marathonfinishplanner"
@@ -21,6 +22,8 @@
     "web": {
       "bundler": "metro",
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": ["expo-asset"],
+    "icon": "./assets/favicon.png"
   }
 }
