@@ -73,6 +73,7 @@ export type OfficialRaceData = {
   timeLimitMinutes?: number | null;
   mccMember?: boolean | null;
   mccCategory?: MccCategory | null;
+  startOptions?: { id: string; label: string; time: string }[];
   startType?: "single" | "wave" | "unknown";
   courseDifficulty?: RaceDataDifficulty;
   courseSummary?: string;

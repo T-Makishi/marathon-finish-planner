@@ -130,7 +130,7 @@ export default function OpeningScreen({
       <StatusBar style="light" />
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="オープニング。タップして計画画面へ進む"
+        accessibilityLabel="オープニング。タップしてアプリへ進む"
         onPress={onFinish}
         style={styles.screen}
       >

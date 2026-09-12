@@ -1,4 +1,6 @@
-import { Platform } from "react-native";
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
+import { validOpeningImage } from "./settings";
+import { Platform, Image } from "react-native";
 import * as Picker from "expo-document-picker";
 import * as FS from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
@@ -61,4 +63,38 @@ export async function printCard(html: string) {
     mimeType: "application/pdf",
     UTI: ".pdf",
   });
+}
+
+export async function pickOpeningImage(): Promise<string | null> {
+  const result = await Picker.getDocumentAsync({ type: ['image/jpeg', 'image/png'], copyToCacheDirectory: true });
+  if (result.canceled || !result.assets[0]) return null;
+  const asset = result.assets[0];
+  if ((asset.size ?? asset.file?.size ?? 0) > 10 * 1024 * 1024) throw new Error('画像は10MB以下のJPEG・PNGを選択してください。');
+  let source = asset.uri;
+  if (Platform.OS === 'web' && asset.file) {
+    source = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error('画像を読み込めませんでした。'));
+      reader.readAsDataURL(asset.file!);
+    });
+  }
+  const size = await new Promise<{ width: number; height: number }>((resolve, reject) => Image.getSize(source, (width, height) => resolve({ width, height }), reject));
+  if (!size.width || !size.height || size.width * size.height > 80000000) throw new Error('画像が大きすぎるか、読み込めない形式です。');
+  const context = ImageManipulator.manipulate(source);
+  try {
+    if (Math.max(size.width, size.height) > 1600) context.resize(size.width >= size.height ? { width: 1600 } : { height: 1600 });
+    const image = await context.renderAsync();
+    try {
+      for (const compress of [0.78, 0.6, 0.4]) {
+        const output = await image.saveAsync({ format: SaveFormat.JPEG, compress, base64: true });
+        const data = `data:image/jpeg;base64,${output.base64}`;
+        // Keep room for both recovery generations and the runner's saved plans.
+        if (validOpeningImage(data) && data.length <= 700000) return data;
+      }
+      throw new Error('保存容量を確保できませんでした。小さい画像を選択してください。');
+    } finally { image.release(); }
+  } catch (error) {
+    throw new Error(error instanceof Error ? `画像の変更に失敗しました：${error.message}` : '画像を読み込めませんでした。JPEG・PNG画像を選び直してください。');
+  } finally { context.release(); }
 }

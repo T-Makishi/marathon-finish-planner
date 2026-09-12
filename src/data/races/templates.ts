@@ -45,7 +45,7 @@ export function createUnverifiedRaceTemplate(input: TemplateInput): OfficialRace
     mccCategory: input.mccCategory ?? null,
     startType: "unknown",
     courseDifficulty: "unknown",
-    courseSummary: "公式情報の確認待ちです。大会名、距離、公式サイトURLだけをひな型として登録しています。",
+    courseSummary: "公式情報の確認待ちです。大会名、距離、公式サイトURLを登録しています。",
     checkpoints: [],
     sections,
     waterStations: [],
@@ -71,7 +71,7 @@ export function createUnverifiedRaceTemplate(input: TemplateInput): OfficialRace
       "公開前に公式サイトの利用条件と最新情報を確認してください。"
     ],
     notes: [
-      "このデータは未確認のひな型です。関門、制限時間、スタート時刻は公式サイトで確認して入力してください。",
+      "詳細情報は未確認です。関門、制限時間、スタート時刻は公式サイトで確認して入力してください。",
       "公式画像、ロゴ、コース図、公式文章は保存・転載していません。"
     ]
   };

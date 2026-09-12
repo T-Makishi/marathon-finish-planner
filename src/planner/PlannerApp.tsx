@@ -1,3 +1,6 @@
+import { planFromRace } from "./racePlan";
+import SelectField from "./SelectField";
+import { PREFECTURES, CATEGORIES, filterRaces, raceDataLabel } from "./catalog";
 import PrintPreview from "./PrintPreview";
 import OpeningScreen from "./OpeningScreen";
 import React, {
@@ -9,6 +12,7 @@ import React, {
 } from "react";
 import {
   AppState,
+  Image,
   Linking,
   Modal,
   Platform,
@@ -34,7 +38,6 @@ import {
 } from "./model";
 import {
   calculate,
-  ENGINE_VERSION,
   cardPoints,
   clockText,
   elapsed,
@@ -50,9 +53,9 @@ import {
   printedTotal,
   exportProblems,
 } from "./cards";
-import { pickBackup, printCard, saveText } from "./files";
+import { pickBackup, pickOpeningImage, printCard, saveText } from "./files";
 const repository = createRepository(AsyncStorage);
-const tabs = ["計画", "大会", "カード", "保存"] as const;
+const tabs = ["大会", "計画", "カード", "保存"] as const;
 type Tab = (typeof tabs)[number];
 function Button({
   title,
@@ -202,11 +205,13 @@ function Planner() {
   const finishOpening = useCallback(() => setShowOpening(false), []);
   const [store, setStore] = useState<PlannerStore | null>(null),
     [loadError, setLoadError] = useState("");
-  const [tab, setTab] = useState<Tab>("計画"),
+  const [tab, setTab] = useState<Tab>("大会"),
     [notice, setNotice] = useState(""),
     [saved, setSaved] = useState("読込中");
   const [advanced, setAdvanced] = useState(false),
     [allRows, setAllRows] = useState(false);
+  const [prefecture, setPrefecture] = useState(""), [category, setCategory] = useState(""), [expandedRace, setExpandedRace] = useState<string | null>(null), [plansExpanded, setPlansExpanded] = useState(false);
+  const [selectedStart, setSelectedStart] = useState<Record<string, string>>({});
   const [catalog, setCatalog] = useState(false),
     [search, setSearch] = useState(""),
     [privacy, setPrivacy] = useState(false);
@@ -271,6 +276,8 @@ function Planner() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [saved]);
   const plan = store?.plans.find((p) => p.id === store.selectedId);
+  const openingBackground = store?.settings !== undefined ? store.settings.openingBackground : (store?.legacyArchive as { settings?: { openingBackgroundUri?: string } } | null)?.settings?.openingBackgroundUri;
+  const filteredRaces = useMemo(() => filterRaces(OFFICIAL_RACE_DATA, prefecture, category, search), [prefecture, category, search]);
   const result = useMemo(() => (plan ? calculate(plan) : null), [plan]);
   function edit<K extends keyof Plan>(key: K, value: Plan[K]) {
     setStore(
@@ -341,41 +348,20 @@ function Planner() {
     });
   }
   function selectRace(race: OfficialRaceData) {
-    const p = newPlan();
-    p.raceName = race.name;
-    p.distance = String(race.distanceKm);
-    p.date = race.officialEventDate || race.eventDate || "";
-    p.startTime = race.startTime || "09:00";
-    p.limit = race.timeLimitMinutes ? elapsed(race.timeLimitMinutes * 60) : "";
-    p.sourceUrl = race.sources[0]?.url || "";
-    p.sourceChecked = race.verifiedAt || "";
-    p.sourceRevision = race.year ? String(race.year) : "";
-    p.sourceStatus = "大会ひな型・最新要項の確認が必要";
-    p.gates = race.checkpoints
-      .filter((g) => g.closingTime)
-      .map((g) => ({
-        id: uid(),
-        name: g.name,
-        km: String(g.distanceKm),
-        time: g.closingTime!,
-        day: "0",
-        kind: /勧告/.test(g.name) ? "advisory" : "official",
-      }));
-    p.terrain = race.sections
-      .filter((t) => t.terrain !== "unknown")
-      .map((t) => ({
-        id: uid(),
-        start: String(t.startKm),
-        end: String(t.endKm),
-        adjustment: "0",
-        memo: t.description || t.terrain,
-      }));
+    const p = planFromRace(race, selectedStart[race.id]);
     add(p);
     setCatalog(false);
     move("大会");
     setNotice(
-      "大会ひな型を新しい計画に追加しました。開催年・スタート・関門を公式要項と照合してください。",
+      "大会を新しい計画に追加しました。開催年・スタート・関門を公式要項と照合してください。",
     );
+  }
+  async function changeOpeningImage(image: string | null) {
+    if (!current.current) return;
+    const settings = { openingBackground: image };
+    await repository.save({ ...current.current, settings });
+    setStore(old => old && { ...old, settings });
+    setNotice(image ? 'オープニング画像を変更しました。' : '標準画像に戻しました。');
   }
   function exportCard() {
     if (!plan) return;
@@ -383,23 +369,7 @@ function Planner() {
     run(async () => {
       const html = buildCardHtml(frozen);
       await printCard(html);
-      setStore(
-        (old) =>
-          old && {
-            ...old,
-            snapshots: [
-              ...old.snapshots,
-              {
-                id: uid(),
-                createdAt: new Date().toISOString(),
-                plan: frozen,
-                html,
-                engineVersion: ENGINE_VERSION,
-              },
-            ],
-          },
-      );
-      setNotice("印刷・共有画面を開きました。出力時の設定を保存しました。");
+      setNotice("印刷・共有画面を開きました。");
     });
   }
   const displayRows =
@@ -885,7 +855,7 @@ function Planner() {
                 <Panel title="計画を選ぶ">
                   <View style={s.wrap}>
                     <Button
-                      title="大会ひな型から追加"
+                      title="大会を選択する"
                       onPress={() => setCatalog(true)}
                     />
                     <Button
@@ -894,7 +864,10 @@ function Planner() {
                       onPress={() => add(newPlan())}
                     />
                   </View>
-                  <Choices
+                  <Button title={plansExpanded ? '保存済み計画を閉じる' : `保存済み計画から選ぶ（${store?.plans.length || 0}件）`} secondary onPress={() => setPlansExpanded(!plansExpanded)} />
+                  <Text style={s.hint}>選択中：{plan.raceName} · {plan.name}</Text>
+                  {plansExpanded && (
+                    <Choices
                     value={plan.id}
                     options={store!.plans.map((p) => ({
                       id: p.id,
@@ -903,8 +876,9 @@ function Planner() {
                     onChange={(v) => {
                       setStore((old) => old && { ...old, selectedId: v });
                       setUndo(null);
+                      setPlansExpanded(false);
                     }}
-                  />
+                  />)}
                 </Panel>
                 <Panel title="大会と計画">
                   <Field
@@ -946,7 +920,7 @@ function Planner() {
                     />
                   </View>
                   <Text style={s.hint}>
-                    完走制限は大会号砲からの経過時間です。大会ひな型は最新要項の確認が必要です。
+                    完走制限は大会号砲からの経過時間です。登録した大会情報は最新要項との照合が必要です。
                   </Text>
                   <Field
                     label="公式要項URL（任意）"
@@ -959,7 +933,7 @@ function Planner() {
                     onChange={(v) => edit("sourceChecked", v)}
                   />
                   <Text style={s.hint}>
-                    {plan.sourceStatus} {plan.sourceRevision}
+                    {plan.sourceStatus.replace(/大会ひな型/g, "登録大会情報")} {plan.sourceRevision}
                   </Text>
                   {/^https?:\/\//.test(plan.sourceUrl) && (
                     <Button
@@ -1303,28 +1277,6 @@ function Planner() {
                 }
               />
             </Panel>
-            <Panel title="カード出力時の設定">
-              {!store.snapshots.length && (
-                <Text style={s.hint}>
-                  カードを出力すると、その時点の計画をここに残します。
-                </Text>
-              )}
-              {[...store.snapshots].reverse().map((snapshot) => (
-                <View style={s.editRow} key={snapshot.id}>
-                  <Text style={s.body}>
-                    {snapshot.plan.raceName} · {snapshot.plan.name}
-                  </Text>
-                  <Text style={s.hint}>
-                    {new Date(snapshot.createdAt).toLocaleString("ja-JP")}
-                  </Text>
-                  <Button
-                    title="この設定を新しい計画として開く"
-                    secondary
-                    onPress={() => add(copyPlan(snapshot.plan))}
-                  />
-                </View>
-              ))}
-            </Panel>
             <Panel title="削除済みの計画">
               {!store.trash.length && (
                 <Text style={s.hint}>削除済みの計画はありません。</Text>
@@ -1352,48 +1304,25 @@ function Planner() {
                 </View>
               ))}
             </Panel>
-            {!!store.legacyArchive && (
-              <Panel title="旧版データの原文">
-                <Text style={s.body}>
-                  練習記録や旧手動ラップを含め、移行前の内容を保管しています。
-                </Text>
-                <Button
-                  title="旧版データを保存"
-                  secondary
-                  onPress={() =>
-                    run(async () =>
-                      saveText(
-                        "run-planner-legacy.json",
-                        JSON.stringify(store.legacyArchive, null, 2),
-                        "application/json",
-                      ),
-                    )
-                  }
-                />
-              </Panel>
-            )}
-            <Panel title="アプリについて">
+            <Panel title="設定">
+              <Text style={s.label}>オープニング画像</Text>
+              <Text style={s.hint}>JPEG・PNGを端末から選べます。画像は端末内で軽量化して保存し、バックアップにも含めます。</Text>
+              <Image source={openingBackground ? { uri: openingBackground } : require('../../assets/opening-background.jpg')} accessibilityLabel="現在のオープニング画像" style={{ width: '100%', height: 160, borderRadius: 12 }} resizeMode="cover" />
+              <Button title="オープニング画像を変更" disabled={busy} onPress={() => run(async () => {
+                const image = await pickOpeningImage();
+                if (image) await changeOpeningImage(image);
+              })} />
+              <Button title="標準画像に戻す" secondary disabled={busy} onPress={() => run(() => changeOpeningImage(null))} />
               <Button
                 title="オープニングを再表示"
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.0.2</Text>
+              <Text style={s.body}>RUN Finish Planner 2.1.0</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary
                 onPress={() => setPrivacy(true)}
-              />
-              <Button
-                title="不具合・お問い合わせ"
-                secondary
-                onPress={() =>
-                  run(async () => {
-                    await Linking.openURL(
-                      "https://github.com/T-Makishi/marathon-finish-planner/issues",
-                    );
-                  })
-                }
               />
               <Text style={s.hint}>PCSAPO / マキシ企画</Text>
             </Panel>
@@ -1413,32 +1342,27 @@ function Planner() {
               secondary
               onPress={() => setCatalog(false)}
             />
-            <Text style={s.pageTitle}>大会ひな型</Text>
-            <Text style={s.body}>
-              最新の開催要項を確認してから使います。選ぶと新しい計画を追加します。
-            </Text>
-            <Field
-              label="大会名・都道府県で検索"
-              value={search}
-              onChange={setSearch}
-            />
-            {OFFICIAL_RACE_DATA.filter(
-              (r) =>
-                r.publicationAllowed !== false &&
-                `${r.name}${r.prefecture}`.includes(search),
-            ).map((r) => (
-              <Pressable
-                key={r.id}
-                accessibilityRole="button"
-                onPress={() => selectRace(r)}
-                style={s.panel}
-              >
-                <Text style={s.heading}>{r.name}</Text>
-                <Text style={s.hint}>
-                  {r.prefecture} · {r.distanceKm} km · 最新要項の確認が必要
-                </Text>
+            <Text style={s.pageTitle}>大会を選択する</Text>
+            <Text style={s.body}>地域と距離で絞り込み、大会名を押すと詳細を確認できます。</Text>
+            <SelectField label="都道府県" value={prefecture} onChange={v => { setPrefecture(v); setExpandedRace(null); }} options={[{ value: '', label: '全国' }, ...PREFECTURES.map(value => ({ value, label: value }))]} />
+            <SelectField label="距離種別" value={category} onChange={v => { setCategory(v); setExpandedRace(null); }} options={CATEGORIES} />
+            <Field label="大会名で検索" value={search} onChange={v => { setSearch(v); setExpandedRace(null); }} />
+            <Text style={s.hint}>該当 {filteredRaces.length}件 ／ 登録 {OFFICIAL_RACE_DATA.filter(r => r.publicationAllowed !== false).length}種目。全国全大会の網羅ではありません。</Text>
+            {!filteredRaces.length && <Text style={s.body}>該当する大会は登録されていません。条件を変更するか、「空の計画を追加」から登録できます。</Text>}
+            {filteredRaces.map(r => <View key={r.id} style={{ borderBottomWidth: 1, borderColor: '#d4ddd5', paddingVertical: 4 }}>
+              <Pressable accessibilityRole="button" accessibilityLabel={`${r.name} ${r.distanceKm}km の詳細`} accessibilityState={{ expanded: expandedRace === r.id }} onPress={() => setExpandedRace(expandedRace === r.id ? null : r.id)} style={{ paddingVertical: 12, flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}><Text style={[s.label, { fontSize: 16 }]}>{r.name}</Text><Text style={s.hint}>{r.prefecture} · {r.distanceKm}km{r.year ? ` · ${r.year}年` : ''}</Text></View><Text>{expandedRace === r.id ? '▴' : '▾'}</Text>
               </Pressable>
-            ))}
+              {expandedRace === r.id && <View style={{ gap: 10, padding: 12, backgroundColor: '#edf3eb', borderRadius: 8 }}>
+                <Text style={s.body}>開催日：{r.officialEventDate || r.eventDate || '未確認'}　スタート：{r.startOptions?.length ? '参加区分を選択' : r.startTime || '未確認'}</Text>
+                <Text style={s.body}>制限時間：{r.timeLimitMinutes ? elapsed(r.timeLimitMinutes * 60) : '未確認'}　登録関門：{r.checkpoints.length}地点</Text>
+                <Text style={s.hint}>{raceDataLabel(r)}{r.verifiedAt ? ` ／ 確認日 ${r.verifiedAt}` : ''}</Text>
+                {(r.notes || []).slice(0, 2).map((note, i) => <Text key={i} style={s.hint}>{note}</Text>)}
+                {r.startOptions?.length ? <SelectField label="参加するスタート時刻" value={selectedStart[r.id] || ""} onChange={v => setSelectedStart(old => ({ ...old, [r.id]: v }))} options={[{ value: "", label: "参加案内の時刻を選択" }, ...r.startOptions.map(o => ({ value: o.id, label: o.label }))]} /> : null}
+                <Button title="この大会・種目で計画を作る" disabled={!!r.startOptions?.length && !selectedStart[r.id]} onPress={() => selectRace(r)} />
+                {r.sources[0]?.url && <Button title="公式情報を確認する" secondary onPress={() => run(async () => { await Linking.openURL(r.sources[0].url); })} />}
+              </View>}
+            </View>)}
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -1486,7 +1410,7 @@ function Planner() {
             />
             <Panel title="プライバシー・データの取り扱い">
               <Text style={s.body}>
-                計画、自己ベスト、入力した大会情報は端末内に保存します。アプリから運営者への送信、位置情報の取得、広告、解析SDK、アカウント登録はありません。
+                計画、自己ベスト、入力した大会情報、オープニング画像は端末内に保存します。アプリから運営者への送信、位置情報の取得、広告、解析SDK、アカウント登録はありません。
               </Text>
               <Text style={s.body}>
                 Web版の配信にはGitHub
@@ -1495,9 +1419,7 @@ function Planner() {
               <Text style={s.body}>
                 バックアップ、印刷、共有は利用者が操作したときに行います。共有先・保管先は利用者が選択します。削除済みの計画、復元前のコピー、旧版データも端末に残ります。完全に消去するには、このサイトの保存データをブラウザ設定から消去するか、iOSアプリを削除してください。外部に保存したファイルは別途削除してください。
               </Text>
-              <Text style={s.body}>
-                お問い合わせ：GitHubのプロジェクト「T-Makishi/marathon-finish-planner」のIssues。個人情報を含む内容は公開投稿しないでください。
-              </Text>
+
               <Text style={s.hint}>2026年9月12日 / PCSAPO / マキシ企画</Text>
             </Panel>
           </ScrollView>
@@ -1506,13 +1428,7 @@ function Planner() {
       {showOpening && (store || loadError) && (
         <OpeningScreen
           onFinish={finishOpening}
-          backgroundUri={
-            (
-              store?.legacyArchive as {
-                settings?: { openingBackgroundUri?: string };
-              } | null
-            )?.settings?.openingBackgroundUri
-          }
+          backgroundUri={openingBackground || undefined}
         />
       )}
     </SafeAreaView>

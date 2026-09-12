@@ -1,3 +1,4 @@
+import type { PlannerSettings } from "./settings";
 export type PaceStyle =
   | "even"
   | "negative-5"
@@ -94,6 +95,7 @@ export type Snapshot = {
 };
 export type PlannerStore = {
   schemaVersion: 2;
+  settings?: PlannerSettings;
   plans: Plan[];
   selectedId: string;
   snapshots: Snapshot[];

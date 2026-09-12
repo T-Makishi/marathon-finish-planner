@@ -12,6 +12,8 @@ import { tokyoMarathon } from "./tokyo-marathon";
 import { toyamaMarathon } from "./toyama-marathon";
 import { yokohamaMarathon } from "./yokohama-marathon";
 
+import { domesticRaceData } from "./domestic-20260912";
+
 const curatedRaceData: OfficialRaceData[] = [
   nahaMarathon,
   toyamaMarathon,
@@ -30,5 +32,6 @@ const curatedSlugs = new Set(curatedRaceData.map((race) => race.slug));
 
 export const RACE_DATA_LIST: OfficialRaceData[] = [
   ...curatedRaceData,
+  ...domesticRaceData,
   ...mccUrlRaceTemplates.filter((race) => !curatedSlugs.has(race.slug))
 ];

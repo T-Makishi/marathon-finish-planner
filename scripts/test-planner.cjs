@@ -511,6 +511,86 @@ test("many checkpoint rows paginate without loss", () => {
   assert.ok(layout.detailCount > 1);
   assert.equal(layout.pages.filter(p => p.kind === 'detail').flatMap(p => p.table.rows).length, 40);
 });
+const { validOpeningImage, validSettings, MAX_IMAGE_BYTES } = require('../src/planner/settings.ts');
+const { PREFECTURES, filterRaces, raceDataLabel } = require('../src/planner/catalog.ts');
+const { planFromRace } = require('../src/planner/racePlan.ts');
+const { OFFICIAL_RACE_DATA } = require('../src/data/raceData.ts');
+const { domesticRaceData } = require('../src/data/races/domestic-20260912.ts');
+const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
+test('opening settings preserve old backups and survive repository round trip', async () => {
+  const store = newStore();
+  assert.equal(parseBackup(JSON.stringify(store)).settings, undefined);
+  store.settings = { openingBackground: png };
+  const memory = kv(), repo = createRepository(memory);
+  await repo.load(); await repo.save(store);
+  assert.equal((await repo.load()).store.settings.openingBackground, png);
+  assert.equal(parseBackup(JSON.stringify(store)).settings.openingBackground, png);
+  store.settings.openingBackground = null;
+  await repo.save(store);
+  assert.equal((await repo.load()).store.settings.openingBackground, null);
+});
+test('opening settings reject external URLs, unsupported images and oversized data', () => {
+  assert.ok(validOpeningImage(png));
+  for (const value of ['https://example.com/image.jpg', 'data:image/svg+xml;base64,PHN2Zz4=', '', 'data:image/jpeg;base64,AAAA', png + '!', 'data:image/jpeg;base64,/9j/' + 'A'.repeat(MAX_IMAGE_BYTES * 2)]) assert.equal(validOpeningImage(value), false);
+  for (const value of [null, [], {}, { openingBackground: 4 }, { openingBackground: 'file:///photo.jpg' }]) assert.equal(validSettings(value), false);
+  const store = newStore(); store.settings = { openingBackground: 'https://example.com/x' };
+  assert.throws(() => parseBackup(JSON.stringify(store)));
+});
+test('failed image persistence preserves previous settings', async () => {
+  const memory = kv(), repo = createRepository(memory);
+  const store = (await repo.load()).store;
+  await repo.save(store);
+  memory.setItem = async () => { throw new Error('quota'); };
+  const failing = createRepository(memory); await failing.load();
+  await assert.rejects(failing.save({ ...store, settings: { openingBackground: png } }));
+  assert.equal((await repo.load()).store.settings, undefined);
+});
+test('47 unique prefectures and combined race filters', () => {
+  assert.equal(PREFECTURES.length, 47); assert.equal(new Set(PREFECTURES).size, 47);
+  const sample = domesticRaceData.find(r => r.slug === 'tango-100');
+  assert.equal(filterRaces([sample], '京都府', 'ultra', '丹後１００').length, 1);
+  assert.equal(filterRaces([sample], '東京都', 'ultra', '').length, 0);
+  assert.equal(filterRaces([sample], '京都府', 'half', '').length, 0);
+  assert.equal(filterRaces([{ ...sample, publicationAllowed: false }], '', '', '').length, 0);
+  assert.equal(filterRaces([{ ...sample, prefecture: '京都府・兵庫県' }], '兵庫県', '', '').length, 1);
+});
+test('catalog has unique IDs and published race sources', () => {
+  assert.equal(new Set(OFFICIAL_RACE_DATA.map(r => r.id)).size, OFFICIAL_RACE_DATA.length);
+  assert.equal(new Set(OFFICIAL_RACE_DATA.map(r => r.slug)).size, OFFICIAL_RACE_DATA.length);
+  for (const r of domesticRaceData) {
+    assert.ok(r.distanceKm > 0 && r.distanceKm <= 1000);
+    assert.ok(PREFECTURES.includes(r.prefecture));
+    assert.equal(r.verifiedAt, '2026-09-12');
+    assert.ok(r.sources.every(s => new URL(s.url).protocol === 'https:'));
+    assert.ok(r.checkpoints.every(g => g.distanceKm > 0 && g.distanceKm < r.distanceKm));
+    assert.equal(r.verificationStatus, 'partially-verified');
+  }
+});
+test('race import requires wave selection and uses its actual start', () => {
+  const r = domesticRaceData.find(r => r.slug === 'fuji-five-lakes-100');
+  assert.throws(() => planFromRace(r)); assert.throws(() => planFromRace(r, 'invalid'));
+  const p = planFromRace(r, '2');
+  assert.equal(p.startTime, '05:00'); assert.equal(p.limit, '14:00:00');
+  assert.equal(p.date, '2026-04-19');
+});
+test('unconfirmed race start stays empty and elapsed gates support next day', () => {
+  const r = { ...domesticRaceData[0], startOptions: undefined, startTime: null, checkpoints: [] };
+  assert.equal(planFromRace(r).startTime, '');
+  r.startTime = '23:00'; r.checkpoints = [{ id: 'next', name: '関門', distanceKm: 20, elapsedLimitMinutes: 120 }];
+  const p = planFromRace(r);
+  assert.equal(p.gates[0].time, '01:00:00'); assert.equal(p.gates[0].day, '1');
+});
+test('updated course distance and strict half-marathon gates are imported', () => {
+  assert.equal(planFromRace(domesticRaceData.find(r => r.slug === 'aga-103')).distance, '103');
+  const p = planFromRace(domesticRaceData.find(r => r.slug === 'osaka-half-21.0975'));
+  assert.equal(p.limit, '2:05:00'); assert.equal(p.gates.length, 7);
+  assert.equal(p.gates[0].time, '12:18');
+  assert.equal(calculate({ ...p, target: '1:30:00' }).errors.length, 0);
+});
+test('past events are labeled by edition instead of current verification', () => {
+  assert.match(raceDataLabel(domesticRaceData[0], '2026-09-12'), /2026年.*開催済み/);
+  assert.match(raceDataLabel(domesticRaceData.find(r => r.slug === 'osaka-half-21.0975'), '2026-09-12'), /基本情報/);
+});
 (async () => {
   let failed = 0;
   for (const t of tests) {

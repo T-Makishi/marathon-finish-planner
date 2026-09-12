@@ -1,3 +1,4 @@
+import { validSettings } from "./settings";
 import {
   Plan,
   PlannerStore,
@@ -89,6 +90,7 @@ export function parseStore(text: string): PlannerStore {
   if (
     !object(s) ||
     s.schemaVersion !== 2 ||
+    (s.settings !== undefined && !validSettings(s.settings)) ||
     !Array.isArray(s.plans) ||
     s.plans.length > 500 ||
     !s.plans.every(validatePlan) ||
