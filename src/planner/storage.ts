@@ -4,6 +4,7 @@ import {
   PlannerStore,
   newPlan,
   newStore,
+  firstUseStore,
   uid,
   PACE_STYLES,
 } from "./model";
@@ -332,7 +333,9 @@ export function createRepository(kv: KV) {
       if (legacy) {
         return { store: await finishCleanup(migrateLegacy(JSON.parse(legacy))), notice: '' };
       }
-      return { store: newStore(), notice: "" };
+      const store = firstUseStore();
+      await saveNow(JSON.stringify(store));
+      return { store, notice: "" };
     },
     save(store: PlannerStore): Promise<void> {
       const payload = JSON.stringify(compactStore(store));

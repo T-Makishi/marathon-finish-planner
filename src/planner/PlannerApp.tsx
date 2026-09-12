@@ -535,6 +535,11 @@ function Planner() {
                 </Text>
               </View>
             </View>
+            {plan.sourceStatus === "架空の大会・使い方サンプル" && tab !== "保存" && (
+              <Panel title="サンプルで使い方を確認">
+                <Text style={s.body}>架空の大会です。「計画」で目標時間を変更し、「カード」でペースカードを確認できます。実際の大会は「大会を選択する」から登録してください。</Text>
+              </Panel>
+            )}
             {undo && undo.id === plan.id && (
               <Button
                 title="直前の行削除を元に戻す"
@@ -1405,7 +1410,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.2.5</Text>
+              <Text style={s.body}>RUN Finish Planner 2.2.6</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary

@@ -75,6 +75,36 @@ const kv = () => {
     },
   };
 };
+test("first use seeds one valid four-hour sample and persists it", async () => {
+  const db = kv();
+  const first = (await createRepository(db).load()).store;
+  assert.equal(first.plans.length, 1);
+  const p = first.plans[0];
+  assert.equal(p.raceName, "使い方サンプル｜フルマラソン");
+  assert.deepEqual(p.comparison, ["03:55:00", "04:00:00", "04:05:00"]);
+  assert.equal(p.style, "even");
+  assert.equal(p.gates.length + p.stops.length + p.terrain.length, 0);
+  assert.equal(calculate(p).errors.length, 0);
+  close(calculate(p).actualNet, 14400);
+  assert.equal(exportProblems(p).length, 0);
+  assert.equal((await createRepository(db).load()).store.selectedId, p.id);
+});
+test("existing plans are never supplemented with a sample", async () => {
+  const db = kv(), existing = newStore();
+  await createRepository(db).save(existing);
+  assert.deepEqual((await createRepository(db).load()).store.plans, existing.plans);
+});
+test("sample stays deleted after permanent removal and reload", async () => {
+  const db = kv(), repo = createRepository(db);
+  const store = (await repo.load()).store;
+  const sample = store.plans[0], replacement = newPlan();
+  store.plans = [replacement]; store.selectedId = replacement.id; store.trash = [sample];
+  await repo.save(store);
+  await repo.purgeTrash(store, [sample.id]);
+  const loaded = (await createRepository(db).load()).store;
+  assert.deepEqual(loaded.plans, [replacement]);
+  assert.equal(loaded.trash.length, 0);
+});
 test("full marathon finish is exactly target", () => {
   const r = calculate(plan());
   close(r.actualNet, 12600);

@@ -168,3 +168,18 @@ export const copyPlan = (plan: Plan): Plan => ({
   id: uid(),
   name: `${plan.name} のコピー`,
 });
+
+/** Seed only a previously unused device; ordinary new plans keep their own defaults. */
+export function firstUseStore(): PlannerStore {
+  const store = newStore();
+  Object.assign(store.plans[0], {
+    raceName: "使い方サンプル｜フルマラソン",
+    name: "4時間・一定ペース",
+    target: "04:00:00",
+    pace: "5:41",
+    comparison: ["03:55:00", "04:00:00", "04:05:00"],
+    cardMode: "both",
+    sourceStatus: "架空の大会・使い方サンプル",
+  });
+  return store;
+}
