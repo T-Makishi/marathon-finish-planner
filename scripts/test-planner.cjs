@@ -640,6 +640,20 @@ test('calendar grid aligns weekdays and year boundaries', () => {
   assert.deepEqual(shiftMonth(2026, 1, -1), { year: 2025, month: 12 });
   assert.deepEqual(shiftMonth(1, 1, -12), { year: 1, month: 1 });
 });
+test('Shouhashi 2026 imports its actual distance and official deadlines', () => {
+  const r = OFFICIAL_RACE_DATA.find(r => r.id === 'shouhashi-half-2026');
+  assert.equal(r.category, 'half');
+  const p = planFromRace(r);
+  assert.equal(p.distance, '21.442');
+  assert.equal(p.date, '2026-11-01');
+  assert.equal(p.startTime, '09:00');
+  assert.equal(p.limit, '3:15:00');
+  assert.equal(p.gates.length, 1);
+  assert.equal(p.gates[0].km, '13');
+  assert.equal(p.gates[0].time, '11:00');
+  assert.equal(p.sourceChecked, '2026-09-12');
+  assert.equal(p.terrain.length, 0);
+});
 (async () => {
   let failed = 0;
   for (const t of tests) {
