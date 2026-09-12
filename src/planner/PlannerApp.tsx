@@ -1230,7 +1230,7 @@ function Planner() {
                   <Text style={s.body}>本番案の印刷ゴール：{elapsed(printedTotal(plan, result))}（{plan.cardClock === "net" ? "ネット" : "号砲から"}）</Text>
                 </Panel>
                 <Panel title="2. 必要な追加資料だけ選ぶ">
-                  <Text style={s.hint}>登録した関門は携帯カードに表示します。詳細な確認表・補給・補正の設定は、必要な場合に別紙を追加できます。</Text>
+                  <Text style={s.hint}>登録した関門は携帯カードに表示します。詳細な確認表・補給・補正の設定は、必要な場合に追加できます。内容が少ない資料は同じ用紙にまとめます。</Text>
                   <Toggle label="関門・制限時間の確認表を追加" value={plan.cardGates} onChange={v => edit("cardGates", v)} />
                   <Toggle label="補給・停止の計画を追加" value={plan.cardNotes} onChange={v => edit("cardNotes", v)} hint={plan.stops.length ? `${plan.stops.length}件の停止を別紙に印刷します。` : "停止が未登録のため、追加ページは作りません。"} />
                   <Toggle label="コース補正の設定表を追加" value={plan.cardTerrain} onChange={v => edit("cardTerrain", v)} hint={plan.terrain.length ? `${plan.terrain.length}区間の設定を別紙に印刷します。` : "補正区間が未登録のため、追加ページは作りません。"} />
@@ -1353,7 +1353,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.1.8</Text>
+              <Text style={s.body}>RUN Finish Planner 2.1.9</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary

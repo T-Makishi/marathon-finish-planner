@@ -327,7 +327,7 @@ test("nearby gates appear in carry cards with pagination and supplemental detail
   const points = displayPoints(p);
   assert.equal(points.length, 13);
   assert.equal(buildPrintLayout(p).cardCount, 2);
-  assert.equal(buildPrintLayout(p).detailCount, 2);
+  assert.equal(buildPrintLayout(p).detailCount, 1);
   const html = buildCardHtml(p);
   assert.ok(html.includes("関門10.1"));
   assert.ok(html.includes("関門10.2"));
@@ -512,7 +512,7 @@ test("many checkpoint rows paginate without loss", () => {
   const p = plan({ cardGates: true, cardNotes: false, cardTerrain: false, gates: Array.from({length: 40}, (_, i) => gate(i + 1, '16:00')) });
   const layout = buildPrintLayout(p);
   assert.ok(layout.detailCount > 1);
-  assert.equal(layout.pages.filter(p => p.kind === 'detail').flatMap(p => p.table.rows).length, 40);
+  assert.equal(layout.pages.filter(p => p.kind === 'detail').flatMap(p => p.tables.flatMap(t => t.rows)).length, 40);
 });
 const { validOpeningImage, validSettings, MAX_IMAGE_BYTES } = require('../src/planner/settings.ts');
 const { PREFECTURES, filterRaces, raceDataLabel } = require('../src/planner/catalog.ts');
@@ -731,6 +731,30 @@ test('existing v2 cleanup rewrites both copies, preserves opening image and clea
   for (const slot of ['a','b']) assert.equal(JSON.parse(JSON.parse(db.map.get(`run-finish-planner-v2-${slot}`)).payload).legacyArchive, null);
   assert.equal((await repo.previousRestore()).legacyArchive, null);
   assert.equal(db.map.has('run-finish-planner-v2-legacy-original'), false);
+});
+test('small selected supplementary tables share one sheet without missing sections', () => {
+  const p = plan({ cardGates: true, cardNotes: true, cardTerrain: true, gates: [gate(13, '12:00')], stops: [stop(15, 30)], terrain: [terrain] });
+  const layout = buildPrintLayout(p), details = layout.pages.filter(p => p.kind === 'detail');
+  assert.equal(layout.detailCount, 1);
+  assert.deepEqual(details[0].tables.map(t => t.title), ['関門・制限時間の確認表', '補給・停止の計画', 'コース補正の設定']);
+  const html = buildCardHtml(p, '2026-09-12', { previewPage: layout.pages.length - 1, preview: true });
+  assert.equal((html.match(/<section class="detail-section">/g) || []).length, 3);
+  assert.ok(html.includes('gate-table'));
+});
+test('large mixed supplementary tables preserve every row in order and fit page budget', () => {
+  const stops = Array.from({ length: 40 }, (_, i) => ({ ...stop(i + 1, 30), memo: `補給${i} ` + '長いメモ'.repeat(12) }));
+  const p = plan({ cardGates: true, cardNotes: true, cardTerrain: true, gates: [gate(13, '16:00')], stops, terrain: [terrain] });
+  const details = buildPrintLayout(p).pages.filter(p => p.kind === 'detail');
+  assert.ok(details.length > 1);
+  const tables = details.flatMap(p => p.tables);
+  assert.deepEqual(tables.filter(t => t.title === '補給・停止の計画').flatMap(t => t.rows.map(r => r[0])), stops.map(s => `${s.km}km`));
+  assert.ok(tables.some(t => t.continuation > 1));
+  details.forEach(p => assert.ok(p.tables.reduce((n,t) => n + 36 + t.heights.reduce((a,b) => a+b,0), 0) <= 240));
+  assert.equal(tables.at(-1).title, 'コース補正の設定');
+});
+test('unselected and empty supplementary sections do not create pages', () => {
+  assert.equal(buildPrintLayout(plan({ cardGates: false, cardNotes: false, cardTerrain: false, gates: [gate(13, '16:00')], stops: [stop(15, 30)], terrain: [terrain] })).detailCount, 0);
+  assert.equal(buildPrintLayout(plan({ cardGates: true, cardNotes: true, cardTerrain: true, gates: [], stops: [], terrain: [], limit: '' })).detailCount, 0);
 });
 (async () => {
   let failed = 0;
