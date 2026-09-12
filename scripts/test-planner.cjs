@@ -621,6 +621,25 @@ test('folded cards pair matching sections and use one external cutting boundary'
   }
   assert.ok(!buildPrintLayout(plan({ cardMode: 'compare' })).pages[0].folded);
 });
+const { parseCalendarDate, calendarValue, calendarCells, shiftMonth } = require('../src/planner/calendar.ts');
+test('calendar validates leap years and preserves ISO date values', () => {
+  for (const value of ['2024-02-29', '2000-02-29', '2026-12-06', '0001-01-01']) {
+    assert.equal(calendarValue(parseCalendarDate(value)), value);
+  }
+  for (const value of ['', '2026-02-29', '1900-02-29', '2026-04-31', '2026-13-01', '2026-00-01', '0000-01-01', '2026-1-1']) {
+    assert.equal(parseCalendarDate(value), null);
+  }
+});
+test('calendar grid aligns weekdays and year boundaries', () => {
+  const september = calendarCells(2026, 9);
+  assert.deepEqual(september.slice(0, 4), [null, null, 1, 2]);
+  assert.equal(september.filter(Boolean).length, 30);
+  assert.equal(calendarCells(2024, 2).filter(Boolean).length, 29);
+  assert.equal(calendarCells(2026, 8).length, 42);
+  assert.deepEqual(shiftMonth(2026, 12, 1), { year: 2027, month: 1 });
+  assert.deepEqual(shiftMonth(2026, 1, -1), { year: 2025, month: 12 });
+  assert.deepEqual(shiftMonth(1, 1, -12), { year: 1, month: 1 });
+});
 (async () => {
   let failed = 0;
   for (const t of tests) {

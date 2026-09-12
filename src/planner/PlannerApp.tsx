@@ -1,6 +1,7 @@
 import { COMPARISON_GOALS } from "./model";
 import { planFromRace } from "./racePlan";
 import SelectField from "./SelectField";
+import DateField from "./DateField";
 import { PREFECTURES, CATEGORIES, filterRaces, raceDataLabel } from "./catalog";
 import PrintPreview from "./PrintPreview";
 import OpeningScreen from "./OpeningScreen";
@@ -893,9 +894,9 @@ function Planner() {
                     onChange={(v) => edit("name", v)}
                   />
                   <View style={s.wrap}>
-                    <Field
+                    <DateField
                       small
-                      label="開催日（YYYY-MM-DD）"
+                      label="開催日"
                       value={plan.date}
                       onChange={(v) => edit("date", v)}
                     />
@@ -928,7 +929,7 @@ function Planner() {
                     value={plan.sourceUrl}
                     onChange={(v) => edit("sourceUrl", v)}
                   />
-                  <Field
+                  <DateField
                     label="要項を確認した日（任意）"
                     value={plan.sourceChecked}
                     onChange={(v) => edit("sourceChecked", v)}
@@ -1321,7 +1322,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.1.2</Text>
+              <Text style={s.body}>RUN Finish Planner 2.1.3</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary
