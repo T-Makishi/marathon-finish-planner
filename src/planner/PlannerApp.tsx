@@ -18,6 +18,7 @@ import React, {
 } from "react";
 import {
   AppState,
+  useWindowDimensions,
   Image,
   Linking,
   Modal,
@@ -219,6 +220,7 @@ function Messages({
   ) : null;
 }
 function Planner() {
+  const compactComparison = useWindowDimensions().width < 820;
   const [showOpening, setShowOpening] = useState(true);
   const finishOpening = useCallback(() => setShowOpening(false), []);
   const [store, setStore] = useState<PlannerStore | null>(null),
@@ -1267,7 +1269,7 @@ function Planner() {
                   {plan.cardMode !== "single" && <>
                     <Text style={s.hint}>比較する目標は{plan.timeBasis === "net" ? "ネットタイム" : "号砲基準"}で入力します。印刷する表と見出しは、下で選ぶ時間基準に統一します。</Text>
                     <Text style={s.hint}>挑戦：好条件で狙う目標 ／ 本命：比較の中心となる目標 ／ 堅実：状況に応じて切り替える目標。左から順にタイムを長く設定します。</Text>
-                    <View style={s.wrap}>{plan.comparison.map((time, i) => <Field small key={i} label={`${COMPARISON_GOALS[i].label}（時:分:秒）`} value={time} onChange={v => { const values = [...plan.comparison] as Plan["comparison"]; values[i] = v; edit("comparison", values); }} />)}</View>
+                    <View style={compactComparison ? { gap: 16 } : s.wrap}>{plan.comparison.map((time, i) => <Field small={!compactComparison} key={i} label={`${COMPARISON_GOALS[i].label}（時:分:秒）`} value={time} onChange={v => { const values = [...plan.comparison] as Plan["comparison"]; values[i] = v; edit("comparison", values); }} />)}</View>
                     <Text style={s.hint}>比較目標は本番案とは別に設定できます。本番案の目標を本命にする場合は、下のボタンを押してください。</Text>
                     <Button title="本番案の目標を本命にして±5分で設定" secondary onPress={() => { const seconds = plan.timeBasis === "gun" ? result.actualGun : result.actualNet; if (Number.isFinite(seconds) && seconds > 300) edit("comparison", [elapsed(seconds - 300), elapsed(seconds), elapsed(seconds + 300)]); }} />
                   </>}
@@ -1403,7 +1405,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.2.3</Text>
+              <Text style={s.body}>RUN Finish Planner 2.2.4</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary

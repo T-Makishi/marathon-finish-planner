@@ -11,6 +11,6 @@ export default function TimeInput({label,value,onChange,kind}: {label:string;val
     const max = i === 0 ? kind === 'clock' ? 23 : kind === 'pace' ? 120 : 99 : 59;
     const values = Array.from({length:max+1},(_,n)=>String(n));
     if (parts[i] && !values.includes(parts[i])) values.push(parts[i]);
-    return <View key={unit} style={{flex:1,minWidth:70}}><SelectField label="" accessibilityLabel={`${label}：${unit}`} value={parts[i]} options={[{value:'',label:'未設定'},...values.map(v=>({value:v,label:`${v}${unit}`}))]} onChange={v=>{ if (!v) {onChange('');return;} const next=parts.map(p=>p || '0');next[i]=v;onChange(joinTime(next,kind));}}/></View>;
+    return <View key={unit} style={{flex:1,minWidth:70}}><SelectField compact label="" accessibilityLabel={`${label}：${unit}`} value={parts[i]} options={[{value:'',label:'未設定'},...values.map(v=>({value:v,label:`${v}${unit === '時間' ? '時' : unit}`}))]} onChange={v=>{ if (!v) {onChange('');return;} const next=parts.map(p=>p || '0');next[i]=v;onChange(joinTime(next,kind));}}/></View>;
   })}</View>;
 }
