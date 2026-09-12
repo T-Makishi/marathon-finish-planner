@@ -2,6 +2,7 @@ import { COMPARISON_GOALS } from "./model";
 import { planFromRace } from "./racePlan";
 import SelectField from "./SelectField";
 import DateField from "./DateField";
+import { emptyRaceForm, applyRaceForm } from "./raceForm";
 import TimeInput from "./TimeInput";
 import { timeKind } from "./timeValues";
 import { PREFECTURES, CATEGORIES, filterRaces, raceDataLabel } from "./catalog";
@@ -226,7 +227,12 @@ function Planner() {
     [saved, setSaved] = useState("読込中");
   const [advanced, setAdvanced] = useState(false),
     [allRows, setAllRows] = useState(false);
-  const [prefecture, setPrefecture] = useState(""), [category, setCategory] = useState(""), [expandedRace, setExpandedRace] = useState<string | null>(null), [plansExpanded, setPlansExpanded] = useState(false);
+  const [prefecture, setPrefecture] = useState(""), [category, setCategory] = useState(""), [expandedRace, setExpandedRace] = useState<string | null>(null), [plansExpanded, setPlansExpanded] = useState(true);
+  const [raceForm, setRaceForm] = useState<Plan>(emptyRaceForm);
+  const [raceFormOpen, setRaceFormOpen] = useState(false);
+  const [raceEditingId, setRaceEditingId] = useState<string | null>(null);
+  function editRaceForm<K extends keyof Plan>(key: K, value: Plan[K]) { setRaceForm(old => ({ ...old, [key]: value })); }
+  function startRaceForm() { setRaceForm(emptyRaceForm()); setRaceEditingId(null); setRaceFormOpen(true); }
   const [courseSections, setCourseSections] = useState({ gates: false, stops: false, terrain: false });
   const [courseSaving, setCourseSaving] = useState(false);
   const [courseSaveResult, setCourseSaveResult] = useState<{ snapshot: PlannerStore; message: string; error: boolean } | null>(null);
@@ -342,6 +348,7 @@ function Planner() {
     );
   }
   function move(next: Tab) {
+    if (next === "大会") setPlansExpanded(true);
     setTab(next);
     scroll.current?.scrollTo({ y: 0, animated: false });
   }
@@ -373,6 +380,7 @@ function Planner() {
     });
   }
   function add(p: Plan) {
+    setRaceForm(emptyRaceForm()); setRaceEditingId(null); setRaceFormOpen(false); setPlansExpanded(true);
     setStore(
       (old) => old && { ...old, plans: [...old.plans, p], selectedId: p.id },
     );
@@ -502,7 +510,7 @@ function Planner() {
         )}
         {store && !plan && (
           <Panel title="計画を作成">
-            <Button title="新しい計画" onPress={() => add(newPlan())} />
+            <Button title="新しい計画" onPress={startRaceForm} />
           </Panel>
         )}
         {plan && result && (
@@ -514,7 +522,7 @@ function Planner() {
                   {tab === "計画"
                     ? "走り方を決める"
                     : tab === "大会"
-                      ? "コースを整える"
+                      ? "コース選択"
                       : tab === "カード"
                         ? "当日は、この一枚で。"
                         : "計画を残す"}
@@ -906,13 +914,14 @@ function Planner() {
                       onPress={() => setCatalog(true)}
                     />
                     <Button
-                      title="空の計画を追加"
+                      title="大会を新規登録"
                       secondary
-                      onPress={() => add(newPlan())}
+                      onPress={startRaceForm}
                     />
                   </View>
                   <Button title={plansExpanded ? '保存済み計画を閉じる' : `保存済み計画から選ぶ（${store?.plans.length || 0}件）`} secondary onPress={() => setPlansExpanded(!plansExpanded)} />
                   <Text style={s.hint}>選択中：{plan.raceName} · {plan.name}</Text>
+                  <Button title="選択中の大会情報を編集" secondary onPress={() => { setRaceForm({ ...plan }); setRaceEditingId(plan.id); setRaceFormOpen(true); }} />
                   {plansExpanded && (
                     <Choices
                     value={plan.id}
@@ -923,47 +932,49 @@ function Planner() {
                     onChange={(v) => {
                       setStore((old) => old && { ...old, selectedId: v });
                       setUndo(null);
-                      setPlansExpanded(false);
+                      setPlansExpanded(true);
+                      setRaceForm(emptyRaceForm()); setRaceEditingId(null); setRaceFormOpen(false);
                     }}
                   />)}
                 </Panel>
-                <Panel title="大会と計画">
+                <FoldPanel title="大会と計画" summary={raceEditingId ? "保存済みの大会情報を編集" : "新しい大会・計画を登録"} open={raceFormOpen} onToggle={() => setRaceFormOpen(!raceFormOpen)}>
+                  <Text style={s.hint}>この入力欄は、下の登録・変更保存ボタンで保存します。</Text>
                   <Field
                     label="大会名"
-                    value={plan.raceName}
-                    onChange={(v) => edit("raceName", v)}
+                    value={raceForm.raceName}
+                    onChange={(v) => editRaceForm("raceName", v)}
                   />
                   <Field
                     label="計画名"
-                    value={plan.name}
-                    onChange={(v) => edit("name", v)}
+                    value={raceForm.name}
+                    onChange={(v) => editRaceForm("name", v)}
                   />
                   <View style={s.wrap}>
                     <DateField
                       small
                       label="開催日"
-                      value={plan.date}
-                      onChange={(v) => edit("date", v)}
+                      value={raceForm.date}
+                      onChange={(v) => editRaceForm("date", v)}
                     />
                     <Field
                       small
                       label="距離（km）"
-                      value={plan.distance}
-                      onChange={(v) => edit("distance", v)}
+                      value={raceForm.distance}
+                      onChange={(v) => editRaceForm("distance", v)}
                     />
                   </View>
                   <View style={s.wrap}>
                     <Field
                       small
                       label="大会号砲（時:分）"
-                      value={plan.startTime}
-                      onChange={(v) => edit("startTime", v)}
+                      value={raceForm.startTime}
+                      onChange={(v) => editRaceForm("startTime", v)}
                     />
                     <Field
                       small
                       label="完走制限（時:分:秒）"
-                      value={plan.limit}
-                      onChange={(v) => edit("limit", v)}
+                      value={raceForm.limit}
+                      onChange={(v) => editRaceForm("limit", v)}
                     />
                   </View>
                   <Text style={s.hint}>
@@ -971,29 +982,43 @@ function Planner() {
                   </Text>
                   <Field
                     label="公式要項URL（任意）"
-                    value={plan.sourceUrl}
-                    onChange={(v) => edit("sourceUrl", v)}
+                    value={raceForm.sourceUrl}
+                    onChange={(v) => editRaceForm("sourceUrl", v)}
                   />
                   <DateField
                     label="要項を確認した日（任意）"
-                    value={plan.sourceChecked}
-                    onChange={(v) => edit("sourceChecked", v)}
+                    value={raceForm.sourceChecked}
+                    onChange={(v) => editRaceForm("sourceChecked", v)}
                   />
                   <Text style={s.hint}>
-                    {plan.sourceStatus.replace(/大会ひな型/g, "登録大会情報")} {plan.sourceRevision}
+                    {raceForm.sourceStatus.replace(/大会ひな型/g, "登録大会情報")} {raceForm.sourceRevision}
                   </Text>
-                  {/^https?:\/\//.test(plan.sourceUrl) && (
+                  {/^https?:\/\//.test(raceForm.sourceUrl) && (
                     <Button
                       title="公式要項を開く"
                       secondary
                       onPress={() =>
                         run(async () => {
-                          await Linking.openURL(plan.sourceUrl);
+                          await Linking.openURL(raceForm.sourceUrl);
                         })
                       }
                     />
                   )}
-                </Panel>
+                  <Button title={raceEditingId ? '大会情報の変更を保存' : 'この大会・計画を登録'} disabled={busy} onPress={() => run(async () => {
+                    if (!current.current) return;
+                    const next = applyRaceForm(current.current, raceForm, raceEditingId);
+                    purgingTrash.current = true;
+                    try {
+                      await repository.save(next);
+                      current.current = next;
+                      setStore(next);
+                      setSaved('端末に保存済み');
+                      setNotice(raceEditingId ? '大会情報の変更を保存しました。' : '大会と計画を登録しました。');
+                      setRaceForm(emptyRaceForm()); setRaceEditingId(null); setRaceFormOpen(false); setPlansExpanded(true);
+                    } finally { purgingTrash.current = false; }
+                  })} />
+                  <Button title="入力を取り消す" secondary disabled={busy} onPress={() => { setRaceForm(emptyRaceForm()); setRaceEditingId(null); setRaceFormOpen(false); }} />
+                </FoldPanel>
                 <FoldPanel title="関門" summary={`${plan.gates.length}地点`} open={courseSections.gates} onToggle={() => setCourseSections(old => ({ ...old, gates: !old.gates }))}>
                   {plan.gates.map((row, i) => (
                     <View style={s.editRow} key={row.id}>
@@ -1205,7 +1230,7 @@ function Planner() {
                   <Text accessibilityLiveRegion="polite" style={[s.body, courseSaveResult?.snapshot === store && courseSaveResult.error && { color: '#992d22' }]}>
                     {courseSaveResult?.snapshot === store ? courseSaveResult.message : saved}
                   </Text>
-                  <Text style={s.hint}>入力内容は自動保存されます。ボタンを押すと、現在の内容を端末に保存して完了を確認できます。</Text>
+                  <Text style={s.hint}>選択中の計画の関門・停止・補正は自動保存されます。大会情報の登録・編集は、その入力欄の保存ボタンで確定してください。</Text>
                 </Panel>
                 <Button
                   title="この計画を削除済みに移す"
@@ -1377,7 +1402,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.2.0</Text>
+              <Text style={s.body}>RUN Finish Planner 2.2.1</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary

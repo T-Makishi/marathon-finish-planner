@@ -786,6 +786,29 @@ test('trash purge reports a failed write without claiming completion', async () 
   await assert.rejects(repo.purgeTrash(store,[store.trash[0].id]),/容量不足/);
   assert.equal((await createRepository(db).load()).store.trash.length,1);
 });
+const { emptyRaceForm, applyRaceForm, raceFields } = require('../src/planner/raceForm.ts');
+test('race registration uses a blank draft and leaves existing plans unchanged', () => {
+  const store=newStore(), draft=emptyRaceForm();
+  raceFields.forEach(k=>assert.equal(draft[k],''));
+  assert.throws(()=>applyRaceForm(store,draft,null),/大会名/);
+  const entered={...draft,raceName:'検証大会',name:'本番',distance:'21.442',startTime:'09:00'};
+  const next=applyRaceForm(store,entered,null);
+  assert.equal(next.plans.length,store.plans.length+1);
+  assert.deepEqual(next.plans[0],store.plans[0]);
+  assert.equal(next.selectedId,draft.id);
+  assert.equal(emptyRaceForm().raceName,'');
+});
+test('editing race basics preserves current pace and course settings', () => {
+  const store=newStore(); const original=store.plans[0];
+  const draft={...original,raceName:'変更後',name:'本番',distance:'42.195',startTime:'09:00'};
+  store.plans[0]={...original,target:'04:10:00',stops:[stop(20,30)]};
+  const next=applyRaceForm(store,draft,original.id);
+  assert.equal(next.plans.length,store.plans.length);
+  assert.equal(next.plans[0].target,'04:10:00');
+  assert.deepEqual(next.plans[0].stops,store.plans[0].stops);
+  assert.equal(next.plans[0].raceName,'変更後');
+  assert.throws(()=>applyRaceForm(store,{...draft,startTime:'25:00'},original.id),/大会号砲/);
+});
 (async () => {
   let failed = 0;
   for (const t of tests) {
