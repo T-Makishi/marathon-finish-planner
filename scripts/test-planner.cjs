@@ -672,6 +672,16 @@ test('all 105 supplied workbook races remain available with their category and o
   assert.equal(p.limit, '');
   assert.equal(p.gates.length, 0);
 });
+test('both card footers use calculated averages and explicit course correction status', () => {
+  const p = plan({ cardMode: 'both', style: 'positive-10', elevation: true, terrain: [terrain] });
+  const html = buildCardHtml(p);
+  assert.equal((html.match(/class="foot-style"/g) || []).length, 2);
+  assert.equal((html.match(/コース補正：ON/g) || []).length, 2);
+  for (const r of comparisonResults(p)) assert.ok(html.includes(`<b>${paceText(r.averagePace)}</b>`));
+  assert.ok(html.includes(`移動平均 ${paceText(calculate(p).averagePace)}/km`));
+  assert.ok(buildCardHtml({ ...p, elevation: false }).includes('コース補正：OFF'));
+  assert.ok(buildCardHtml({ ...p, terrain: [] }).includes('コース補正：未設定'));
+});
 (async () => {
   let failed = 0;
   for (const t of tests) {
