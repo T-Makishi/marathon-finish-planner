@@ -1,4 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import OpeningScreen from "./OpeningScreen";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   AppState,
   Linking,
@@ -191,6 +198,8 @@ function Messages({
   ) : null;
 }
 function Planner() {
+  const [showOpening, setShowOpening] = useState(true);
+  const finishOpening = useCallback(() => setShowOpening(false), []);
   const [store, setStore] = useState<PlannerStore | null>(null),
     [loadError, setLoadError] = useState("");
   const [tab, setTab] = useState<Tab>("計画"),
@@ -1448,7 +1457,12 @@ function Planner() {
               </Panel>
             )}
             <Panel title="アプリについて">
-              <Text style={s.body}>RUN Finish Planner 2.0.0</Text>
+              <Button
+                title="オープニングを再表示"
+                secondary
+                onPress={() => setShowOpening(true)}
+              />
+              <Text style={s.body}>RUN Finish Planner 2.0.1</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary
@@ -1573,6 +1587,18 @@ function Planner() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+      {showOpening && (store || loadError) && (
+        <OpeningScreen
+          onFinish={finishOpening}
+          backgroundUri={
+            (
+              store?.legacyArchive as {
+                settings?: { openingBackgroundUri?: string };
+              } | null
+            )?.settings?.openingBackgroundUri
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }
