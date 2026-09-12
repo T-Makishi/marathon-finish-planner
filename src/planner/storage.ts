@@ -359,9 +359,8 @@ export function createRepository(kv: KV) {
         const old = previous ? compactStore(parseStore(previous)) : null;
         let trimmed: PlannerStore | null = null;
         if (old) {
-          let plans = old.plans.filter(p => !targets.has(p.id));
-          if (!plans.length) plans = [newPlan()];
-          trimmed = { ...old, plans, selectedId: plans.some(p => p.id === old.selectedId) ? old.selectedId : plans[0].id, trash: old.trash.filter(p => !targets.has(p.id)) };
+          const plans = old.plans.filter(p => !targets.has(p.id));
+          trimmed = { ...old, plans, selectedId: plans.some(p => p.id === old.selectedId) ? old.selectedId : plans[0]?.id || "", trash: old.trash.filter(p => !targets.has(p.id)) };
         }
         await saveNow(JSON.stringify(clean));
         await saveNow(JSON.stringify(clean));

@@ -105,6 +105,27 @@ test("sample stays deleted after permanent removal and reload", async () => {
   assert.deepEqual(loaded.plans, [replacement]);
   assert.equal(loaded.trash.length, 0);
 });
+test("zero plans survive purge, reload, backup and new race registration", async () => {
+  const db = kv(), repo = createRepository(db);
+  const initial = (await repo.load()).store;
+  const sample = initial.plans[0];
+  await repo.preserveBeforeRestore(initial);
+  const empty = { ...initial, plans: [], selectedId: "", trash: [sample] };
+  await repo.save(empty);
+  await repo.purgeTrash(empty, [sample.id]);
+  const loaded = (await createRepository(db).load()).store;
+  assert.equal(loaded.plans.length, 0);
+  assert.equal(loaded.trash.length, 0);
+  assert.equal(parseBackup(JSON.stringify(loaded)).plans.length, 0);
+  const recovery = await repo.previousRestore();
+  assert.equal(recovery.plans.length, 0);
+  assert.equal(recovery.selectedId, "");
+  const { applyRaceForm, emptyRaceForm } = require('../src/planner/raceForm.ts');
+  const draft = { ...emptyRaceForm(), raceName: '登録確認', name: 'プランA', distance: '42.195', startTime: '09:00' };
+  const next = applyRaceForm(loaded, draft, null);
+  await repo.save(next);
+  assert.equal((await createRepository(db).load()).store.plans[0].raceName, '登録確認');
+});
 test("full marathon finish is exactly target", () => {
   const r = calculate(plan());
   close(r.actualNet, 12600);
