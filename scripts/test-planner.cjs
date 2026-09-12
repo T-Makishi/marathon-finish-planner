@@ -476,6 +476,14 @@ test("start closure at 0km checks lineup delay and prints correctly", () => {
   assert.equal(cardTime(p, r, 0), "0:00:00");
   assert.equal(calculate({ ...p, delayMinutes: "45" }).canPrint, false);
 });
+test("manual intervals respect fastest allowed pace in finish mode", () => {
+  const r = calculate(plan({ intent: "finish", style: "custom", limit: "06:00:00", fastestPace: "6:00", overrides: [manual] }));
+  assert.ok(r.errors.some(s => s.includes("最速許容")));
+});
+test("finish-only pace constraint does not leak into target mode", () => {
+  const r = calculate(plan({ fastestPace: "6:00" }));
+  close(r.actualNet, 12600);
+});
 (async () => {
   let failed = 0;
   for (const t of tests) {

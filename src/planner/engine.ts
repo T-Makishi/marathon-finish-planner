@@ -276,9 +276,11 @@ export function calculate(plan: Plan): Calculation {
     (!Number.isFinite(target) || target <= 0 || target > 86400 * 7)
   )
     fail("目標タイムが不正、またはスタートロスより短くなっています。");
-  const fastest = plan.fastestPace ? paceValue(plan.fastestPace) : 1;
+  const fastest = plan.intent === "finish" && plan.fastestPace ? paceValue(plan.fastestPace) : 1;
   if (!Number.isFinite(fastest) || fastest < 1 || fastest > 7200)
     fail("最速許容ペースを 分:秒 で入力してください。");
+  if (plan.style === "custom" && overrides.some(s => s.paceN < fastest))
+    fail("直接指定した区間が最速許容ペースを超えています。区間ペースか許容ペースを見直してください。");
   if (plan.intent === "finish" && (limit === null || !Number.isFinite(limit)))
     fail("制限完走にはゴールの制限時間が必要です。");
   if (out.errors.length) return out;
