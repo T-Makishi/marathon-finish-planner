@@ -2,7 +2,7 @@
   "expo": {
     "name": "RUN Finish Planner",
     "slug": "marathon-finish-planner",
-    "version": "2.2.1",
+    "version": "2.2.2",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
@@ -23,7 +23,9 @@
       "bundler": "metro",
       "favicon": "./assets/favicon.png"
     },
-    "plugins": ["expo-asset"],
+    "plugins": [
+      "expo-asset"
+    ],
     "icon": "./assets/favicon.png"
   }
 }

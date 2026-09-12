@@ -4,7 +4,8 @@ import SelectField from "./SelectField";
 import DateField from "./DateField";
 import { emptyRaceForm, applyRaceForm } from "./raceForm";
 import TimeInput from "./TimeInput";
-import { timeKind } from "./timeValues";
+import DistanceInput from "./DistanceInput";
+import { timeKind, numericOptions } from "./timeValues";
 import { PREFECTURES, CATEGORIES, filterRaces, raceDataLabel } from "./catalog";
 import PrintPreview from "./PrintPreview";
 import OpeningScreen from "./OpeningScreen";
@@ -107,7 +108,7 @@ function Field({
   return (
     <View style={[s.field, small && { flex: 1, minWidth: 115 }]}>
       <Text style={s.label}>{label}</Text>
-      {timeKind(label) ? <TimeInput label={label} value={value} onChange={onChange} kind={timeKind(label)!} inputStyle={s.input} /> : (<TextInput
+      {timeKind(label) ? <TimeInput label={label} value={value} onChange={onChange} kind={timeKind(label)!} /> : label.includes("km") ? <DistanceInput label={label} value={value} onChange={onChange} /> : label.includes("翌日なら") ? <SelectField label="" accessibilityLabel={label} value={value} options={numericOptions(label,value)} onChange={onChange} /> : (<TextInput
         accessibilityLabel={label}
         value={value}
         onChangeText={onChange}
@@ -1402,7 +1403,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.2.1</Text>
+              <Text style={s.body}>RUN Finish Planner 2.2.2</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary

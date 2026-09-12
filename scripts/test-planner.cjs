@@ -809,6 +809,16 @@ test('editing race basics preserves current pace and course settings', () => {
   assert.equal(next.plans[0].raceName,'変更後');
   assert.throws(()=>applyRaceForm(store,{...draft,startTime:'25:00'},original.id),/大会号砲/);
 });
+const { numericOptions, distanceParts, joinDistance } = require('../src/planner/timeValues.ts');
+test('numeric selectors retain signed corrections and existing precise values',()=>{
+  assert.ok(numericOptions('補正 秒/km','-7.5').some(o=>o.value==='-7.5'));
+  assert.ok(numericOptions('補正 秒/km','0').some(o=>o.value==='-120'));
+  assert.ok(numericOptions('停止時間 秒','20').some(o=>o.value==='20'));
+  assert.ok(numericOptions('停止時間 秒','1234').some(o=>o.value==='1234'));
+  for(const value of ['21.0975','42.195','21.442','13.123456','1000']) assert.equal(joinDistance(...distanceParts(value)),value);
+  assert.deepEqual(distanceParts(''),['','']);
+  assert.equal(joinDistance('5','200'),'5.2');
+});
 (async () => {
   let failed = 0;
   for (const t of tests) {

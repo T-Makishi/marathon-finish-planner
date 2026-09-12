@@ -3,7 +3,7 @@ import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 export default function SelectField({ label, accessibilityLabel = label, value, options, onChange }: { label: string; accessibilityLabel?: string; value: string; options: { value: string; label: string }[]; onChange: (value: string) => void }) {
   const [open, setOpen] = useState(false);
   return <View style={{ gap: 8 }}>
-    <Text style={{ color: '#233e30', fontSize: 14, fontWeight: '600' }}>{label}</Text>
+    {label && <Text style={{ color: '#233e30', fontSize: 14, fontWeight: '600' }}>{label}</Text>}
     {Platform.OS === 'web' ? React.createElement('select', {
       'aria-label': accessibilityLabel, value, onChange: (event: React.ChangeEvent<HTMLSelectElement>) => onChange(event.target.value),
       style: { width: '100%', padding: 12, minHeight: 46, fontSize: 16, color: '#233e30', border: '1px solid #c8d4ca', borderRadius: 8, background: '#fff' },
