@@ -7,6 +7,7 @@ import TimeInput from "./TimeInput";
 import DistanceInput from "./DistanceInput";
 import { timeKind, numericOptions } from "./timeValues";
 import { PREFECTURES, CATEGORIES, filterRaces, raceDataLabel } from "./catalog";
+import UserGuide from "./UserGuide";
 import PrintPreview from "./PrintPreview";
 import OpeningScreen from "./OpeningScreen";
 import React, {
@@ -62,7 +63,7 @@ import {
 } from "./cards";
 import { pickBackup, pickOpeningImage, printCard, saveText } from "./files";
 const repository = createRepository(AsyncStorage);
-const tabs = ["大会", "計画", "カード", "保存"] as const;
+const tabs = ["大会", "計画", "カード", "保存", "使い方"] as const;
 type Tab = (typeof tabs)[number];
 function Button({
   title,
@@ -511,12 +512,12 @@ function Planner() {
             />
           </Panel>
         )}
-        {store && !plan && (
+        {store && !plan && tab !== "使い方" && (
           <Panel title="計画を作成">
             <Button title="新しい計画" onPress={startRaceForm} />
           </Panel>
         )}
-        {plan && result && (
+        {plan && result && tab !== "使い方" && (
           <>
             <View style={s.titleRow}>
               <View style={{ flex: 1 }}>
@@ -1410,7 +1411,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.2.6</Text>
+              <Text style={s.body}>RUN Finish Planner 2.2.7</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary
@@ -1420,6 +1421,7 @@ function Planner() {
             </Panel>
           </>
         )}
+        {tab === "使い方" && <UserGuide onOpen={move} />}
         <Text style={s.footer}>PLAN YOUR RACE. RUN YOUR PLAN.</Text>
       </ScrollView>
       <Modal
