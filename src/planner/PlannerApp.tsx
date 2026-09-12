@@ -21,6 +21,7 @@ import {
   AppState,
   useWindowDimensions,
   Image,
+  Keyboard,
   Linking,
   Modal,
   Platform,
@@ -356,6 +357,11 @@ function Planner() {
     setTab(next);
     scroll.current?.scrollTo({ y: 0, animated: false });
   }
+  function goHome() {
+    Keyboard.dismiss();
+    setNotice("");
+    move("大会");
+  }
   async function run(action: () => Promise<void>) {
     setBusy(true);
     try {
@@ -538,10 +544,15 @@ function Planner() {
     <SafeAreaView style={s.safe}>
       <StatusBar style="dark" />
       <View style={s.top}>
-        <View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="RUN FINISH PLANNER：ホームに戻る"
+          onPress={goHome}
+          style={({ pressed }) => ({ flexShrink: 1, minHeight: 44, justifyContent: "center", opacity: pressed ? 0.65 : 1 })}
+        >
           <Text style={s.brand}>RUN FINISH PLANNER</Text>
           <Text style={s.hint}>レース前に整える、自分の走行計画。</Text>
-        </View>
+        </Pressable>
         <Text style={s.saved}>{saved}</Text>
       </View>
       <View style={s.tabs}>
@@ -1420,7 +1431,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.2.9</Text>
+              <Text style={s.body}>RUN Finish Planner 2.2.10</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary
