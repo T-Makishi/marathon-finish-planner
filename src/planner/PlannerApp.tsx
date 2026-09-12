@@ -1394,7 +1394,7 @@ function Planner() {
             <Panel title="設定">
               <Text style={s.label}>オープニング画像</Text>
               <Text style={s.hint}>JPEG・PNGを端末から選べます。画像は端末内で軽量化して保存し、バックアップにも含めます。</Text>
-              <Image source={openingBackground ? { uri: openingBackground } : require('../../assets/opening-background.jpg')} accessibilityLabel="現在のオープニング画像" style={{ width: '100%', height: 160, borderRadius: 12 }} resizeMode="cover" />
+              <Image source={openingBackground ? { uri: openingBackground } : require('../../assets/opening-background.jpg')} accessibilityLabel="現在のオープニング画像" style={{ width: '100%', height: 160, borderRadius: 12, backgroundColor: '#0b0d0c' }} resizeMode={openingBackground ? "cover" : "contain"} />
               <Button title="オープニング画像を変更" disabled={busy} onPress={() => run(async () => {
                 const image = await pickOpeningImage();
                 if (image) await changeOpeningImage(image);
@@ -1405,7 +1405,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.2.4</Text>
+              <Text style={s.body}>RUN Finish Planner 2.2.5</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary

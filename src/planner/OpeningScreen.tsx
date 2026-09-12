@@ -137,7 +137,7 @@ export default function OpeningScreen({
         <Image
           source={custom ? { uri: backgroundUri } : BACKGROUND}
           style={styles.image}
-          resizeMode="cover"
+          resizeMode={custom ? "cover" : "contain"}
           accessible={false}
           onLoad={() => setImageReady(true)}
           onError={() => {
