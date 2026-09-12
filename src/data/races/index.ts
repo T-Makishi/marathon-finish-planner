@@ -16,9 +16,12 @@ import { domesticRaceData } from "./domestic-20260912";
 
 import { shouhashiHalf } from "./shouhashi-half";
 
+import { tsukubaMarathon } from "./tsukuba-marathon";
+
 const curatedRaceData: OfficialRaceData[] = [
   nahaMarathon,
   shouhashiHalf,
+  tsukubaMarathon,
   toyamaMarathon,
   hokkaidoMarathon,
   fukuokaMarathon,

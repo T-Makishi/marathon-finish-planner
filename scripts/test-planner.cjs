@@ -654,6 +654,24 @@ test('Shouhashi 2026 imports its actual distance and official deadlines', () => 
   assert.equal(p.sourceChecked, '2026-09-12');
   assert.equal(p.terrain.length, 0);
 });
+test('all 105 supplied workbook races remain available with their category and official URL', () => {
+  const coverage = require('../docs/release/workbook-race-coverage-20260912.json');
+  assert.equal(coverage.length, 105);
+  assert.equal(new Set(coverage.map(row => row.raceId)).size, 105);
+  const host = url => new URL(url).hostname.replace(/^www\./, '');
+  for (const row of coverage) {
+    const race = OFFICIAL_RACE_DATA.find(r => r.id === row.raceId);
+    assert.ok(race && race.publicationAllowed !== false, row.name);
+    assert.equal(race.category, row.category, row.name);
+    assert.ok(race.sources.some(s => host(s.url) === host(row.url)), row.name);
+  }
+  const p = planFromRace(OFFICIAL_RACE_DATA.find(r => r.id === 'tsukuba-marathon-2026'));
+  assert.equal(p.date, '2026-11-22');
+  assert.equal(p.distance, '42.195');
+  assert.equal(p.startTime, '08:50');
+  assert.equal(p.limit, '');
+  assert.equal(p.gates.length, 0);
+});
 (async () => {
   let failed = 0;
   for (const t of tests) {

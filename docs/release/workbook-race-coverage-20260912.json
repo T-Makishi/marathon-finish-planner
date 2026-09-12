@@ -1,0 +1,1052 @@
+[
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 5,
+    "name": "八ヶ岳高原ハーフマラソン",
+    "url": "https://www.hokuto-kanko.jp/",
+    "category": "half",
+    "raceId": "yatsugatake-kogen-half-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 6,
+    "name": "一関国際ハーフマラソン",
+    "url": "https://ichinoseki-half.jp/",
+    "category": "half",
+    "raceId": "ichinoseki-half-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 7,
+    "name": "舞鶴赤れんがハーフマラソン",
+    "url": "https://maizuruakarenga-marathon.jp/",
+    "category": "half",
+    "raceId": "maizuru-akarenga-half-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 8,
+    "name": "当別スウェーデンマラソン",
+    "url": "https://www.tobetsu-sweden-marathon.com/",
+    "category": "half",
+    "raceId": "tobetsu-sweden-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 9,
+    "name": "いびがわマラソン",
+    "url": "https://ibigawa-marathon.jp/",
+    "category": "half",
+    "raceId": "ibigawa-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 10,
+    "name": "作.AC 真駒内マラソン",
+    "url": "https://sakumara.jp/",
+    "category": "full",
+    "raceId": "makomanai-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 11,
+    "name": "ジュビロ磐田メモリアルマラソン",
+    "url": "https://www.jubilo-marathon.com/",
+    "category": "half",
+    "raceId": "jubilo-iwata-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 12,
+    "name": "ランニング桜島",
+    "url": "https://www.runningsakurajima.jp/",
+    "category": "half",
+    "raceId": "running-sakurajima-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 13,
+    "name": "防府マラソン",
+    "url": "https://hofu-yomiuri.jp/",
+    "category": "full",
+    "raceId": "hofu-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 14,
+    "name": "おおがきマラソン",
+    "url": "https://www.ogaki-marason.jp/",
+    "category": "half",
+    "raceId": "ogaki-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 15,
+    "name": "京都亀岡ハーフマラソン",
+    "url": "https://kameoka-half-marathon.jp/",
+    "category": "half",
+    "raceId": "kameoka-half-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 16,
+    "name": "維新の里 萩城下町マラソン",
+    "url": "https://hagi-joukamachi-marathon.jp/",
+    "category": "half",
+    "raceId": "hagi-joukamachi-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 17,
+    "name": "かさま陶芸の里ハーフマラソン",
+    "url": "https://www.kasa-mara.jp/",
+    "category": "half",
+    "raceId": "kasama-tougei-half-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 18,
+    "name": "沖縄100Kウルトラマラソン",
+    "url": "https://www.okinawa100k.jp/",
+    "category": "ultra",
+    "raceId": "okinawa-100k-ultra-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 19,
+    "name": "いぶすき菜の花マラソン",
+    "url": "https://ibusuki-nanohana.com/",
+    "category": "full",
+    "raceId": "ibusuki-nanohana-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 20,
+    "name": "にしおマラソン",
+    "url": "https://nishio-marathon.jp/",
+    "category": "full",
+    "raceId": "nishio-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 21,
+    "name": "石垣島マラソン",
+    "url": "https://www.ishigakijima-marathon.jp/",
+    "category": "full",
+    "raceId": "ishigakijima-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 22,
+    "name": "勝田全国マラソン",
+    "url": "https://katsutamarathon.jp/",
+    "category": "full",
+    "raceId": "katsuta-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 23,
+    "name": "湘南藤沢市民マラソン",
+    "url": "https://shonan-fujisawacity-marathon.jp/",
+    "category": "half",
+    "raceId": "shonan-fujisawa-city-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 24,
+    "name": "館山若潮マラソン",
+    "url": "https://tateyama-wakasio.jp/",
+    "category": "full",
+    "raceId": "tateyama-wakasio-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 25,
+    "name": "別府大分毎日マラソン",
+    "url": "https://www.betsudai.com/",
+    "category": "full",
+    "raceId": "beppu-oita-mainichi-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 26,
+    "name": "守谷ハーフマラソン",
+    "url": "https://www.moriya-half.jp/",
+    "category": "half",
+    "raceId": "moriya-half-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 27,
+    "name": "富士マラソンフェスタ",
+    "url": "https://fuji-marathon-festa.jp/",
+    "category": "half",
+    "raceId": "fuji-marathon-festa-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 28,
+    "name": "愛媛マラソン",
+    "url": "https://ehimemarathon.jp/",
+    "category": "full",
+    "raceId": "ehime-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 29,
+    "name": "神奈川マラソン",
+    "url": "https://kanagawa-marathon.jp/",
+    "category": "half",
+    "raceId": "kanagawa-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 30,
+    "name": "香川丸亀国際ハーフマラソン",
+    "url": "https://www.km-half.com/",
+    "category": "half",
+    "raceId": "kagawa-marugame-half-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 31,
+    "name": "さいたまマラソン",
+    "url": "https://saitama-marathon.jp/",
+    "category": "full",
+    "raceId": "saitama-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 32,
+    "name": "京都マラソン",
+    "url": "https://kyoto-marathon.com/",
+    "category": "full",
+    "raceId": "kyoto-marathon-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 33,
+    "name": "北九州マラソン",
+    "url": "https://kitakyushu-marathon.jp/",
+    "category": "full",
+    "raceId": "kitakyushu-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 34,
+    "name": "浜松シティマラソン",
+    "url": "https://www.hamamatsu-city-marathon.com/",
+    "category": "half",
+    "raceId": "hamamatsu-city-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 35,
+    "name": "熊本城マラソン",
+    "url": "https://kumamotojyo-marathon.jp/",
+    "category": "full",
+    "raceId": "kumamoto-castle-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 36,
+    "name": "高知龍馬マラソン",
+    "url": "https://ryoma-marathon.jp/",
+    "category": "full",
+    "raceId": "kochi-ryoma-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 37,
+    "name": "いわきサンシャインマラソン",
+    "url": "https://iwaki-marathon.jp/",
+    "category": "full",
+    "raceId": "iwaki-sunshine-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 38,
+    "name": "世界遺産姫路城マラソン",
+    "url": "https://himeji-marathon.jp/",
+    "category": "full",
+    "raceId": "himeji-castle-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 39,
+    "name": "横島いちごマラソン大会",
+    "url": "https://ichigo-marathon.jp/",
+    "category": "half",
+    "raceId": "yokoshima-ichigo-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 40,
+    "name": "玉名いだてんマラソン",
+    "url": "https://ichigo-marathon.jp/",
+    "category": "full",
+    "raceId": "tamana-idaten-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 41,
+    "name": "読売犬山ハーフマラソン",
+    "url": "https://www.inuyamahalf.com/",
+    "category": "half",
+    "raceId": "inuyama-half-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 42,
+    "name": "丹波篠山ABCマラソン",
+    "url": "https://tambasasayama-abc-marathon.jp/",
+    "category": "full",
+    "raceId": "tambasasayama-abc-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 43,
+    "name": "鹿児島マラソン",
+    "url": "https://www.kagoshima-marathon.jp/",
+    "category": "full",
+    "raceId": "kagoshima-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 44,
+    "name": "かつしかふれあいRUNフェスタ",
+    "url": "https://www.katsushika-fureai-runfesta.jp/",
+    "category": "half",
+    "raceId": "katsushika-fureai-runfesta-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 45,
+    "name": "びわ湖マラソン",
+    "url": "https://biwako-marathon.com/",
+    "category": "full",
+    "raceId": "biwako-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 46,
+    "name": "名古屋ウィメンズマラソン",
+    "url": "https://womens-marathon.nagoya/",
+    "category": "full",
+    "raceId": "nagoya-womens-marathon-2027",
+    "action": "existing",
+    "status": "partially-verified"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 47,
+    "name": "静岡マラソン",
+    "url": "https://www.shizuoka-marathon.com/",
+    "category": "full",
+    "raceId": "shizuoka-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 48,
+    "name": "かがわマラソン",
+    "url": "https://kagawa-marathon.com/",
+    "category": "full",
+    "raceId": "kagawa-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 49,
+    "name": "新潟ハーフマラソン",
+    "url": "https://n-halfmarathon.jp/",
+    "category": "half",
+    "raceId": "niigata-half-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 50,
+    "name": "板橋Cityマラソン",
+    "url": "https://i-c-m.jp/",
+    "category": "full",
+    "raceId": "itabashi-city-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 51,
+    "name": "鳥取マラソン",
+    "url": "https://tottori-marathon.jp/",
+    "category": "full",
+    "raceId": "tottori-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 52,
+    "name": "さが桜マラソン",
+    "url": "https://sagasakura-marathon.jp/",
+    "category": "full",
+    "raceId": "saga-sakura-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 53,
+    "name": "とくしまマラソン",
+    "url": "https://www.tokushima-marathon.jp/",
+    "category": "full",
+    "raceId": "tokushima-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 54,
+    "name": "穂の国・豊橋ハーフマラソン",
+    "url": "https://honokuni-runner.com/",
+    "category": "half",
+    "raceId": "honokuni-toyohashi-half-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 55,
+    "name": "ふくい桜マラソン",
+    "url": "https://www.fukui-sakura-marathon.jp/",
+    "category": "full",
+    "raceId": "fukui-sakura-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 56,
+    "name": "焼津みなとマラソン",
+    "url": "https://www.yaizuminato-marathon.jp/",
+    "category": "half",
+    "raceId": "yaizu-minato-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 57,
+    "name": "志摩ロードパーティハーフマラソン",
+    "url": "https://shima.roadparty.jp/",
+    "category": "half",
+    "raceId": "shima-road-party-half-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 58,
+    "name": "長野マラソン",
+    "url": "https://www.naganomarathon.gr.jp/",
+    "category": "full",
+    "raceId": "nagano-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 59,
+    "name": "イーハトーブ花巻ハーフマラソン",
+    "url": "https://hanamaki-half.jp/",
+    "category": "half",
+    "raceId": "hanamaki-half-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 60,
+    "name": "魚津しんきろうマラソン",
+    "url": "https://www.uozu-shinkirou-marathon.jp/",
+    "category": "half",
+    "raceId": "uozu-shinkirou-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 61,
+    "name": "仙台国際ハーフマラソン",
+    "url": "https://www.sendaihalf.com/",
+    "category": "half",
+    "raceId": "sendai-half-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 62,
+    "name": "いわて奥州きらめきマラソン",
+    "url": "https://oshukirameki.jp/",
+    "category": "full",
+    "raceId": "oshu-kirameki-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 63,
+    "name": "八戸うみねこマラソン全国大会",
+    "url": "https://event-guide.daily-tohoku.news/",
+    "category": "half",
+    "raceId": "hachinohe-umineko-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 64,
+    "name": "洞爺湖マラソン",
+    "url": "https://www.toyako-marathon.jp/",
+    "category": "full",
+    "raceId": "toyako-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 65,
+    "name": "カーター記念黒部名水マラソン",
+    "url": "https://www.kurobe-taikyo.jp/",
+    "category": "full",
+    "raceId": "kurobe-meisui-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 66,
+    "name": "サロマ湖100kmウルトラマラソン",
+    "url": "https://saromanblue.jp/",
+    "category": "ultra",
+    "raceId": "saroma-lake-100km-ultra-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 67,
+    "name": "函館マラソン",
+    "url": "https://hakodate-marathon.jp/",
+    "category": "full",
+    "raceId": "hakodate-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 68,
+    "name": "富士吉田火祭りロードレース",
+    "url": "https://www.himatsuri-roadrace.jp/",
+    "category": "half",
+    "raceId": "fujiyoshida-himatsuri-road-race-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 69,
+    "name": "北海道マラソン",
+    "url": "https://hokkaido-marathon.com/",
+    "category": "full",
+    "raceId": "hokkaido-marathon-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 70,
+    "name": "日本最北端わっかない平和マラソン",
+    "url": "https://wakkanai-marathon.jp/",
+    "category": "full",
+    "raceId": "wakkanai-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 71,
+    "name": "白鷹若鮎マラソン大会",
+    "url": "https://www.town.shirataka.lg.jp/",
+    "category": "half",
+    "raceId": "shiratakawa-akaayu-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 72,
+    "name": "オホーツク網走マラソン",
+    "url": "https://www.abashiri-marathon.jp/",
+    "category": "full",
+    "raceId": "abashiri-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 73,
+    "name": "いわて盛岡シティマラソン",
+    "url": "https://iwate-morioka-city-marathon.jp/",
+    "category": "full",
+    "raceId": "iwate-morioka-city-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 74,
+    "name": "別海町パイロットマラソン",
+    "url": "https://betsukai-marathon.jp/",
+    "category": "full",
+    "raceId": "betsukai-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 75,
+    "name": "山形まるごとマラソン大会",
+    "url": "https://yamagata-city-marathon.com/",
+    "category": "half",
+    "raceId": "yamagata-marugoto-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 76,
+    "name": "札幌マラソン",
+    "url": "https://satumara.sapporo-sport.jp/",
+    "category": "half",
+    "raceId": "sapporo-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 77,
+    "name": "新潟シティマラソン",
+    "url": "https://runfes-niigata.com/",
+    "category": "full",
+    "raceId": "niigata-city-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 78,
+    "name": "四万十川ウルトラマラソン",
+    "url": "https://shimanto-ultra.jp/",
+    "category": "ultra",
+    "raceId": "shimanto-river-ultra-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 79,
+    "name": "長井マラソン",
+    "url": "https://nagai-marathon.jp/",
+    "category": "full",
+    "raceId": "nagai-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 80,
+    "name": "しまだ大井川マラソンinリバティ",
+    "url": "https://www.shimada-marathon.jp/",
+    "category": "full",
+    "raceId": "shimada-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 81,
+    "name": "手賀沼エコマラソン",
+    "url": "https://teganuma-eco.jp/",
+    "category": "half",
+    "raceId": "teganuma-eco-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 82,
+    "name": "横浜マラソン",
+    "url": "https://yokohamamarathon.jp/",
+    "category": "full",
+    "raceId": "yokohama-marathon-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 83,
+    "name": "水戸黄門漫遊マラソン",
+    "url": "https://mitokomon-manyu-marathon.com/",
+    "category": "full",
+    "raceId": "mito-komon-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 84,
+    "name": "諏訪湖マラソン",
+    "url": "https://suwako.marathon.fm/",
+    "category": "half",
+    "raceId": "suwako-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 85,
+    "name": "金沢マラソン",
+    "url": "https://www.kanazawa-marathon.jp/",
+    "category": "full",
+    "raceId": "kanazawa-marathon-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 86,
+    "name": "下関海響マラソン",
+    "url": "https://kaikyomarathon.jp/",
+    "category": "full",
+    "raceId": "shimonoseki-kaikyo-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 87,
+    "name": "天童ラ・フランスマラソン",
+    "url": "https://www.lafrance-marathon.com/",
+    "category": "half",
+    "raceId": "tendo-lafrance-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 88,
+    "name": "富山マラソン",
+    "url": "https://www.toyamamarathon.com/",
+    "category": "full",
+    "raceId": "toyama-marathon-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 89,
+    "name": "筑後川マラソン",
+    "url": "https://chikugogawa-m.jp/",
+    "category": "half",
+    "raceId": "chikugogawa-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 90,
+    "name": "ぐんまマラソン",
+    "url": "https://www.g-marathon.com/",
+    "category": "full",
+    "raceId": "gunma-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 91,
+    "name": "福岡マラソン",
+    "url": "https://www.f-marathon.jp/",
+    "category": "full",
+    "raceId": "fukuoka-marathon-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 92,
+    "name": "MINATOシティハーフマラソン",
+    "url": "https://minato-half.jp/",
+    "category": "half",
+    "raceId": "minato-city-half-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 93,
+    "name": "ひたちシーサイドマラソン",
+    "url": "https://hitachi-marathon.jp/",
+    "category": "full",
+    "raceId": "hitachi-seaside-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 94,
+    "name": "神戸マラソン",
+    "url": "https://kobe-marathon.net/",
+    "category": "full",
+    "raceId": "kobe-marathon-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 95,
+    "name": "つくばマラソン",
+    "url": "https://www.tsukuba-marathon.com/",
+    "category": "full",
+    "raceId": "tsukuba-marathon-2026",
+    "action": "added",
+    "status": "partially-verified"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 96,
+    "name": "福知山マラソン",
+    "url": "https://fukuchiyama-marathon.com/",
+    "category": "full",
+    "raceId": "fukuchiyama-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 97,
+    "name": "大田原マラソン",
+    "url": "https://www.ohtawara-marathon.com/",
+    "category": "full",
+    "raceId": "ohtawara-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 98,
+    "name": "ヨロンマラソン",
+    "url": "https://www.yoronmarathon.com/",
+    "category": "full",
+    "raceId": "yoron-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 99,
+    "name": "NAHAマラソン",
+    "url": "https://naha-marathon.jp/",
+    "category": "full",
+    "raceId": "naha-marathon-2026",
+    "action": "existing",
+    "status": "partially-verified"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 100,
+    "name": "国宝松江城マラソン",
+    "url": "https://www.matsuejo-marathon.jp/",
+    "category": "full",
+    "raceId": "matsuejo-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 101,
+    "name": "湘南国際マラソン",
+    "url": "https://www.shonan-kokusai.jp/",
+    "category": "full",
+    "raceId": "shonan-international-42.195-2026",
+    "action": "existing",
+    "status": "partially-verified"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 102,
+    "name": "奈良マラソン",
+    "url": "https://www.nara-marathon.jp/",
+    "category": "full",
+    "raceId": "nara-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 103,
+    "name": "富士山マラソン",
+    "url": "https://mtfujimarathon.com/",
+    "category": "full",
+    "raceId": "mt-fuji-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 104,
+    "name": "東海ハーフマラソン",
+    "url": "https://www.tokai-halfmarathon.com/",
+    "category": "half",
+    "raceId": "tokai-half-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 105,
+    "name": "青島太平洋マラソン",
+    "url": "https://www.aotai.gr.jp/",
+    "category": "full",
+    "raceId": "aoshima-taiheiyo-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 106,
+    "name": "みえ松阪マラソン",
+    "url": "https://mie-matsusaka-marathon.jp/",
+    "category": "full",
+    "raceId": "mie-matsusaka-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 107,
+    "name": "和歌山ジャズマラソン",
+    "url": "https://www.city.wakayama.wakayama.jp/",
+    "category": "half",
+    "raceId": "wakayama-jazz-marathon-url-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 108,
+    "name": "大阪マラソン",
+    "url": "https://www.osaka-marathon.com/",
+    "category": "full",
+    "raceId": "osaka-marathon-template",
+    "action": "existing",
+    "status": "needs-review"
+  },
+  {
+    "sheet": "国内マラソン大会一覧",
+    "row": 109,
+    "name": "東京マラソン",
+    "url": "https://www.marathon.tokyo/",
+    "category": "full",
+    "raceId": "tokyo-marathon-template",
+    "action": "existing",
+    "status": "needs-review"
+  }
+]
