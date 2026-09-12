@@ -22,6 +22,8 @@ const {
 } = require("../src/planner/engine.ts");
 const {
   buildCardHtml,
+  buildPrintLayout,
+  printedTotal,
   cardTime,
   comparisonResults,
   exportProblems,
@@ -315,18 +317,16 @@ test("invalid comparison prevents printing", () =>
       }),
     ).length,
   ));
-test("card adds all gates and notes without dropping close points", () => {
+test("supplemental pages preserve nearby gates without splitting carry card", () => {
   const p = plan({
     gates: [gate(10.1, "12:00"), gate(10.2, "12:00")],
     stops: [stop(12.3, 30)],
     cardGates: true,
   });
   const points = displayPoints(p);
-  assert.ok(
-    points.includes(10100000) &&
-      points.includes(10200000) &&
-      points.includes(12300000),
-  );
+  assert.equal(points.length, 11);
+  assert.equal(buildPrintLayout(p).cardCount, 1);
+  assert.equal(buildPrintLayout(p).detailCount, 2);
   const html = buildCardHtml(p);
   assert.ok(html.includes("関門10.1"));
   assert.ok(html.includes("関門10.2"));
@@ -458,7 +458,7 @@ test("comparison retains selected gate and stop notes", () => {
     }),
   );
   assert.ok(html.includes("関門10"));
-  assert.ok(html.includes("補給 30秒"));
+  assert.ok(html.includes("補給") && html.includes("30秒"));
 });
 test("long labels fail explicitly rather than clipping print", () =>
   assert.ok(exportProblems(plan({ raceName: "大".repeat(61) })).length));
@@ -483,6 +483,33 @@ test("manual intervals respect fastest allowed pace in finish mode", () => {
 test("finish-only pace constraint does not leak into target mode", () => {
   const r = calculate(plan({ fastestPace: "6:00" }));
   close(r.actualNet, 12600);
+});
+test("marathon carry cards keep all eleven points on one A4 page", () => {
+  for (const cardFormat of ['pocket', 'wrist']) {
+    const layout = buildPrintLayout(plan({ cardFormat, cardGates: false, cardNotes: false, cardTerrain: false }));
+    assert.equal(layout.pages.length, 1);
+    assert.equal(layout.pages[0].cards[0].points.length, 11);
+    assert.equal(layout.width, cardFormat === 'wrist' ? 50 : 85);
+  }
+});
+test("main and comparison have matching dimensions even for saved wrist setting", () => {
+  const layout = buildPrintLayout(plan({ cardMode: 'both', cardFormat: 'wrist', cardGates: false, cardNotes: false, cardTerrain: false }));
+  assert.equal(layout.pages.length, 1);
+  assert.equal(layout.cardCount, 2);
+  assert.ok(layout.pages[0].cards.every(c => c.width === 85 && c.height === 135 && c.points.length === 11));
+});
+test("gun heading matches finish row with fifteen minute start delay", () => {
+  const p = plan({ target: '02:30:00', delayMinutes: '15', cardClock: 'gun', timeBasis: 'net' });
+  close(printedTotal(p, calculate(p)), 9900);
+  const html = buildCardHtml(p);
+  assert.ok(html.includes('class="finish-time">2:45:00</strong>'));
+  assert.equal(cardTime(p, calculate(p), 42195000), '2:45:00');
+});
+test("many checkpoint rows paginate without loss", () => {
+  const p = plan({ cardGates: true, cardNotes: false, cardTerrain: false, gates: Array.from({length: 40}, (_, i) => gate(i + 1, '16:00')) });
+  const layout = buildPrintLayout(p);
+  assert.ok(layout.detailCount > 1);
+  assert.equal(layout.pages.filter(p => p.kind === 'detail').flatMap(p => p.table.rows).length, 40);
 });
 (async () => {
   let failed = 0;

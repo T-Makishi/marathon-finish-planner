@@ -1,3 +1,4 @@
+import PrintPreview from "./PrintPreview";
 import OpeningScreen from "./OpeningScreen";
 import React, {
   useCallback,
@@ -45,9 +46,8 @@ import {
 import { createRepository, parseBackup } from "./storage";
 import {
   buildCardHtml,
-  cardTime,
-  comparisonResults,
-  displayPoints,
+  buildPrintLayout,
+  printedTotal,
   exportProblems,
 } from "./cards";
 import { pickBackup, printCard, saveText } from "./files";
@@ -410,7 +410,7 @@ function Planner() {
         )
       : [];
   const problems = plan ? exportProblems(plan) : [];
-  const compare = useMemo(() => (plan ? comparisonResults(plan) : []), [plan]);
+  const printLayout = plan ? buildPrintLayout(plan) : null;
   return (
     <SafeAreaView style={s.safe}>
       <StatusBar style="dark" />
@@ -1208,118 +1208,34 @@ function Planner() {
             )}
             {tab === "カード" && (
               <>
-                <Panel title="カードの設定">
-                  <Choices
-                    value={plan.cardMode}
-                    options={[
-                      { id: "single", label: "1案を大きく" },
-                      { id: "compare", label: "3案を比較" },
-                      { id: "both", label: "両方作る" },
-                    ]}
-                    onChange={(v) => edit("cardMode", v)}
-                  />
-                  {plan.cardMode !== "single" && (
-                    <View style={s.wrap}>
-                      {plan.comparison.map((time, i) => (
-                        <Field
-                          small
-                          key={i}
-                          label={`比較案 ${i + 1}（時:分:秒）`}
-                          value={time}
-                          onChange={(v) => {
-                            const values = [
-                              ...plan.comparison,
-                            ] as Plan["comparison"];
-                            values[i] = v;
-                            edit("comparison", values);
-                          }}
-                        />
-                      ))}
-                    </View>
-                  )}
-                  <Choices
-                    value={plan.cardFormat}
-                    options={[
-                      { id: "pocket", label: "ポケット用" },
-                      { id: "wrist", label: "手首用" },
-                    ]}
-                    onChange={(v) => edit("cardFormat", v)}
-                  />
-                  <Choices
-                    value={plan.cardClock}
-                    options={[
-                      { id: "net", label: "ネット累計" },
-                      { id: "gun", label: "号砲からの累計" },
-                    ]}
-                    onChange={(v) => edit("cardClock", v)}
-                  />
-                  <Toggle
-                    label="関門・余裕を載せる"
-                    value={plan.cardGates}
-                    onChange={(v) => edit("cardGates", v)}
-                  />
-                  <Toggle
-                    label="停止・補給メモを載せる"
-                    value={plan.cardNotes}
-                    onChange={(v) => edit("cardNotes", v)}
-                  />
-                  <Toggle
-                    label="コース補正値を載せる"
-                    value={plan.cardTerrain}
-                    onChange={(v) => edit("cardTerrain", v)}
-                  />
-                  <Text style={s.hint}>
-                    1案は幅90mm、手首用は40mm。3案比較は読みやすさのため幅100mmです。地点が多い場合は複数枚に分け、行を省略しません。
-                  </Text>
+                <Panel title="1. 印刷するカード">
+                  <Choices value={plan.cardMode} options={[{ id: "single", label: "本番案だけ" }, { id: "compare", label: "3案比較だけ" }, { id: "both", label: "本番案＋3案比較" }]} onChange={v => patch({ cardMode: v, ...(v !== "single" ? { cardFormat: "pocket" as const } : {}) })} />
+                  {plan.cardMode !== "single" && <>
+                    <Text style={s.hint}>比較する目標は{plan.timeBasis === "net" ? "ネットタイム" : "号砲基準"}で入力します。印刷する表と見出しは、下で選ぶ時間基準に統一します。</Text>
+                    <View style={s.wrap}>{plan.comparison.map((time, i) => <Field small key={i} label={`比較${["A", "B", "C"][i]}（時:分:秒）`} value={time} onChange={v => { const values = [...plan.comparison] as Plan["comparison"]; values[i] = v; edit("comparison", values); }} />)}</View>
+                    <Button title="現在の目標を中心に±5分で設定" secondary onPress={() => { const seconds = plan.timeBasis === "gun" ? result.actualGun : result.actualNet; if (Number.isFinite(seconds) && seconds > 300) edit("comparison", [elapsed(seconds - 300), elapsed(seconds), elapsed(seconds + 300)]); }} />
+                  </>}
+                  {plan.cardMode === "single" ? <Choices value={plan.cardFormat} options={[{ id: "pocket", label: "ポケット 85 × 135mm" }, { id: "wrist", label: "手首用 50 × 180mm" }]} onChange={v => edit("cardFormat", v)} /> : <Text style={s.body}>サイズ：85 × 135mm（比較の3列が読めるポケットサイズ）</Text>}
+                  <Text style={s.hint}>フルマラソンの主要11地点を1枚に収めます。「本番案＋3案比較」は同じ大きさの2枚をA4の1ページに並べます。</Text>
+                  <Choices value={plan.cardClock} options={[{ id: "net", label: "ネット累計で印刷" }, { id: "gun", label: "号砲からの累計で印刷" }]} onChange={v => edit("cardClock", v)} />
+                  <Text style={s.body}>本番案の印刷ゴール：{elapsed(printedTotal(plan, result))}（{plan.cardClock === "net" ? "ネット" : "号砲から"}）</Text>
+                </Panel>
+                <Panel title="2. 必要な追加資料だけ選ぶ">
+                  <Text style={s.hint}>追加資料はA4の別ページです。携帯カードに細かい説明を詰め込みません。以前の「載せる」設定は、別紙の選択として引き継いでいます。</Text>
+                  <Toggle label="関門・制限時間の確認表を追加" value={plan.cardGates} onChange={v => edit("cardGates", v)} />
+                  <Toggle label="補給・停止の計画を追加" value={plan.cardNotes} onChange={v => edit("cardNotes", v)} hint={plan.stops.length ? `${plan.stops.length}件の停止を別紙に印刷します。` : "停止が未登録のため、追加ページは作りません。"} />
+                  <Toggle label="コース補正の設定表を追加" value={plan.cardTerrain} onChange={v => edit("cardTerrain", v)} hint={plan.terrain.length ? `${plan.terrain.length}区間の設定を別紙に印刷します。` : "補正区間が未登録のため、追加ページは作りません。"} />
                 </Panel>
                 <Messages items={problems} error />
-                <Panel title="累計時間プレビュー">
-                  <Text style={s.hint}>
-                    印刷画面には大会名・時間基準・選択した補足も表示されます。
-                  </Text>
-                  <ScrollView horizontal>
-                    <View
-                      style={{
-                        minWidth: plan.cardMode === "single" ? 275 : 440,
-                      }}
-                    >
-                      <View style={s.tableRow}>
-                        <Text style={s.cell}>距離</Text>
-                        {(plan.cardMode === "single"
-                          ? ["累計時間"]
-                          : plan.comparison
-                        ).map((label, i) => (
-                          <Text key={i} style={s.numeric}>
-                            {label}
-                          </Text>
-                        ))}
-                      </View>
-                      {displayPoints(plan).map((point) => (
-                        <View key={point} style={s.tableRow}>
-                          <Text style={s.cell}>
-                            {pointLabel(
-                              point / 1e6,
-                              numberValue(plan.distance),
-                            )}
-                          </Text>
-                          {(plan.cardMode === "single"
-                            ? [result]
-                            : compare
-                          ).map((r, i) => (
-                            <Text key={i} style={s.numeric}>
-                              {cardTime(plan, r, point)}
-                            </Text>
-                          ))}
-                        </View>
-                      ))}
-                    </View>
-                  </ScrollView>
-                  {plan.cardMode === "both" && (
-                    <Text style={s.hint}>1案のカードも同時に出力します。</Text>
-                  )}
+                <Messages items={printLayout?.warnings || []} />
+                <Panel title="3. 印刷される内容を確認">
+                  <Text style={s.heading}>A4縦 {printLayout?.pages.length || 0}ページ</Text>
+                  <Text style={s.body}>携帯カード {printLayout?.cardCount || 0}枚 ／ 追加資料 {printLayout?.detailCount || 0}ページ</Text>
+                  <Text style={s.hint}>{printLayout?.width} × {printLayout?.height}mm。点線が切り取り線です。</Text>
+                  <PrintPreview plan={plan} />
                 </Panel>
                 <Button
-                  title={busy ? "準備中…" : "印刷・PDF・共有"}
+                  title={busy ? "準備中…" : `この内容を印刷・PDF・共有（${printLayout?.pages.length || 0}ページ）`}
                   disabled={busy || !!problems.length}
                   onPress={exportCard}
                 />
@@ -1462,7 +1378,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.0.1</Text>
+              <Text style={s.body}>RUN Finish Planner 2.0.2</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary

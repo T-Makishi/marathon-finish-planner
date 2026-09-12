@@ -1,6 +1,6 @@
 {
   "name": "marathon-finish-planner",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "private": true,
   "main": "index.js",
   "scripts": {
@@ -28,7 +28,8 @@
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
     "react-native-safe-area-context": "~5.7.0",
-    "react-native-web": "~0.21.2"
+    "react-native-web": "~0.21.2",
+    "react-native-webview": "13.16.1"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

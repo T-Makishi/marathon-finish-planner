@@ -52,7 +52,7 @@ export async function printCard(html: string) {
     popup.document.close();
     return;
   }
-  const file = await Print.printToFileAsync({ html });
+  const file = await Print.printToFileAsync({ html, width: 595.2756, height: 841.8898, margins: { top: 0, bottom: 0, left: 0, right: 0 } });
   if (!(await Sharing.isAvailableAsync())) {
     await Print.printAsync({ uri: file.uri });
     return;
