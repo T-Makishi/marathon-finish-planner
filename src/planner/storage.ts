@@ -346,6 +346,33 @@ export function createRepository(kv: KV) {
       queue = task;
       return task;
     },
+    purgeTrash(store: PlannerStore, ids: string[]): Promise<PlannerStore> {
+      const targets = new Set(store.trash.filter(p => ids.includes(p.id)).map(p => p.id));
+      const clean = compactStore({ ...store, trash: store.trash.filter(p => !targets.has(p.id)) });
+      const operation = async () => {
+        const key = `${PREFIX}-before-restore`;
+        const previous = await kv.getItem(key);
+        // Validate the recovery copy before modifying any saved data.
+        const old = previous ? compactStore(parseStore(previous)) : null;
+        let trimmed: PlannerStore | null = null;
+        if (old) {
+          let plans = old.plans.filter(p => !targets.has(p.id));
+          if (!plans.length) plans = [newPlan()];
+          trimmed = { ...old, plans, selectedId: plans.some(p => p.id === old.selectedId) ? old.selectedId : plans[0].id, trash: old.trash.filter(p => !targets.has(p.id)) };
+        }
+        await saveNow(JSON.stringify(clean));
+        await saveNow(JSON.stringify(clean));
+        if (trimmed) {
+          const text = JSON.stringify(trimmed);
+          await kv.setItem(key, text);
+          if (await kv.getItem(key) !== text) throw new Error('復元用コピーの整理を確認できませんでした。再試行してください。');
+        }
+        return clean;
+      };
+      const task = queue.catch(() => {}).then(() => typeof navigator !== 'undefined' && navigator.locks ? navigator.locks.request(PREFIX, operation) : operation());
+      queue = task.then(() => {}, () => {});
+      return task;
+    },
     async preserveBeforeRestore(store: PlannerStore) {
       const value = JSON.stringify(compactStore(store));
       await kv.setItem(`${PREFIX}-before-restore`, value);

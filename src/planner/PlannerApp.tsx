@@ -2,6 +2,8 @@ import { COMPARISON_GOALS } from "./model";
 import { planFromRace } from "./racePlan";
 import SelectField from "./SelectField";
 import DateField from "./DateField";
+import TimeInput from "./TimeInput";
+import { timeKind } from "./timeValues";
 import { PREFECTURES, CATEGORIES, filterRaces, raceDataLabel } from "./catalog";
 import PrintPreview from "./PrintPreview";
 import OpeningScreen from "./OpeningScreen";
@@ -104,7 +106,7 @@ function Field({
   return (
     <View style={[s.field, small && { flex: 1, minWidth: 115 }]}>
       <Text style={s.label}>{label}</Text>
-      <TextInput
+      {timeKind(label) ? <TimeInput label={label} value={value} onChange={onChange} kind={timeKind(label)!} inputStyle={s.input} /> : (<TextInput
         accessibilityLabel={label}
         value={value}
         onChangeText={onChange}
@@ -112,7 +114,7 @@ function Field({
         autoCapitalize="none"
         autoCorrect={false}
         maxLength={160}
-      />
+      />)}
       {hint && <Text style={s.hint}>{hint}</Text>}
     </View>
   );
@@ -350,6 +352,19 @@ function Planner() {
     } finally {
       setBusy(false);
     }
+  }
+  function requestPurge(ids: string[], description: string) {
+    setConfirmation({
+      title: '削除済みの計画を完全に削除',
+      body: `${description}を完全に削除します。この操作は取り消せません。端末内の復元用コピーからも除きます。外部に保存したバックアップは残ります。`,
+      action: async () => {
+        if (!current.current) return;
+        const clean = await repository.purgeTrash(current.current, ids);
+        setStore(clean);
+        setUndo(null);
+        setNotice('削除済みの計画を完全に削除しました。');
+      },
+    });
   }
   function add(p: Plan) {
     setStore(
@@ -1313,6 +1328,8 @@ function Planner() {
               />
             </Panel>
             <Panel title="削除済みの計画">
+              {store.trash.length > 0 && <Button title={`削除済みの計画をすべて削除（${store.trash.length}件）`} secondary disabled={busy} onPress={() => requestPurge(store.trash.map(p => p.id), `削除済みの計画${store.trash.length}件`)} />}
+
               {!store.trash.length && (
                 <Text style={s.hint}>削除済みの計画はありません。</Text>
               )}
@@ -1336,6 +1353,7 @@ function Planner() {
                       )
                     }
                   />
+                  <Button title="この計画を完全に削除" secondary disabled={busy} onPress={() => requestPurge([p.id], `${p.raceName}・${p.name}`)} />
                 </View>
               ))}
             </Panel>
@@ -1353,7 +1371,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.1.9</Text>
+              <Text style={s.body}>RUN Finish Planner 2.2.0</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary
@@ -1405,7 +1423,7 @@ function Planner() {
         visible={!!confirmation}
         transparent
         animationType="fade"
-        onRequestClose={() => setConfirmation(null)}
+        onRequestClose={() => { if (!busy) setConfirmation(null); }}
       >
         <View style={s.overlay}>
           <View style={s.dialog}>
@@ -1416,15 +1434,15 @@ function Planner() {
               disabled={busy}
               onPress={() => {
                 const action = confirmation?.action;
-                setConfirmation(null);
                 if (action)
                   run(async () => {
-                    await action();
+                    try { await action(); } finally { setConfirmation(null); }
                   });
               }}
             />
             <Button
               title="キャンセル"
+              disabled={busy}
               secondary
               onPress={() => setConfirmation(null)}
             />
@@ -1452,7 +1470,7 @@ function Planner() {
                 Pagesを使用し、配信事業者がアクセス時のIPアドレスなどを処理する場合があります。外部サイトを開くと、そのサイトの方針が適用されます。
               </Text>
               <Text style={s.body}>
-                バックアップ、印刷、共有は利用者が操作したときに行います。共有先・保管先は利用者が選択します。削除済みの計画と復元前のコピーは端末に残ります。不要な旧データと印刷履歴は整理されます。完全に消去するには、このサイトの保存データをブラウザ設定から消去するか、iOSアプリを削除してください。外部に保存したファイルは別途削除してください。
+                バックアップ、印刷、共有は利用者が操作したときに行います。共有先・保管先は利用者が選択します。削除済みの計画は個別または一括で完全に削除できます。削除対象は端末内の復元用コピーからも除きます。不要な旧データと印刷履歴は整理されます。完全に消去するには、このサイトの保存データをブラウザ設定から消去するか、iOSアプリを削除してください。外部に保存したファイルは別途削除してください。
               </Text>
 
               <Text style={s.hint}>2026年9月12日 / PCSAPO / マキシ企画</Text>

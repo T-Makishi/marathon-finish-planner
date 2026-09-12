@@ -756,6 +756,36 @@ test('unselected and empty supplementary sections do not create pages', () => {
   assert.equal(buildPrintLayout(plan({ cardGates: false, cardNotes: false, cardTerrain: false, gates: [gate(13, '16:00')], stops: [stop(15, 30)], terrain: [terrain] })).detailCount, 0);
   assert.equal(buildPrintLayout(plan({ cardGates: true, cardNotes: true, cardTerrain: true, gates: [], stops: [], terrain: [], limit: '' })).detailCount, 0);
 });
+const { normalizeTime, timeKind, timeParts, joinTime } = require('../src/planner/timeValues.ts');
+test('time input normalizes full width numerals while preserving signs and fractions', () => {
+  assert.equal(normalizeTime('０２：５０：００'), '02:50:00');
+  assert.equal(normalizeTime('−１２．５'), '-12.5');
+  assert.equal(joinTime(timeParts('２：３：４', 'duration'), 'duration'), '02:03:04');
+  assert.equal(joinTime(['9','5'], 'clock'), '09:05');
+  assert.equal(timeKind('ウェーブ号砲（任意）'), 'clock');
+  assert.equal(timeKind('補正 秒/km'), 'seconds');
+  assert.equal(timeKind('大会名'), undefined);
+});
+test('individual and bulk trash purge keep active plans and clean both recovery slots', async () => {
+  const db = kv(), repo = createRepository(db), store = (await repo.load()).store;
+  const a = newPlan(), b = newPlan(); store.trash = [a,b];
+  await repo.save(store); await repo.preserveBeforeRestore({...store,plans:[a,...store.plans]});
+  const first = await repo.purgeTrash(store,[a.id,store.plans[0].id]);
+  assert.deepEqual(first.trash.map(p=>p.id),[b.id]);
+  assert.deepEqual(first.plans,store.plans);
+  assert.ok(!(await repo.previousRestore()).plans.some(p=>p.id===a.id));
+  for (const slot of ['a','b']) assert.ok(!JSON.parse(JSON.parse(db.map.get(`run-finish-planner-v2-${slot}`)).payload).trash.some(p=>p.id===a.id));
+  const final = await repo.purgeTrash(first,[b.id]);
+  assert.equal(final.trash.length,0);
+  assert.equal((await createRepository(db).load()).store.trash.length,0);
+});
+test('trash purge reports a failed write without claiming completion', async () => {
+  const db=kv(), repo=createRepository(db), store=(await repo.load()).store;
+  store.trash=[newPlan()]; await repo.save(store);
+  db.setItem=async()=>{throw new Error('容量不足');};
+  await assert.rejects(repo.purgeTrash(store,[store.trash[0].id]),/容量不足/);
+  assert.equal((await createRepository(db).load()).store.trash.length,1);
+});
 (async () => {
   let failed = 0;
   for (const t of tests) {
