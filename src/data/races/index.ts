@@ -12,6 +12,8 @@ import { tokyoMarathon } from "./tokyo-marathon";
 import { toyamaMarathon } from "./toyama-marathon";
 import { yokohamaMarathon } from "./yokohama-marathon";
 
+import { okinawaRaceData } from "./okinawa-20260912";
+
 import { domesticRaceData } from "./domestic-20260912";
 
 import { shouhashiHalf } from "./shouhashi-half";
@@ -34,10 +36,11 @@ const curatedRaceData: OfficialRaceData[] = [
   osakaMarathon
 ];
 
-const curatedSlugs = new Set(curatedRaceData.map((race) => race.slug));
+const curatedSlugs = new Set([...curatedRaceData, ...okinawaRaceData].map((race) => race.slug));
 
 export const RACE_DATA_LIST: OfficialRaceData[] = [
   ...curatedRaceData,
   ...domesticRaceData,
+  ...okinawaRaceData,
   ...mccUrlRaceTemplates.filter((race) => !curatedSlugs.has(race.slug))
 ];

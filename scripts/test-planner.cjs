@@ -870,6 +870,55 @@ test('numeric selectors retain signed corrections and existing precise values',(
   assert.deepEqual(distanceParts(''),['','']);
   assert.equal(joinDistance('5','200'),'5.2');
 });
+const { okinawaRaceData } = require('../src/data/races/okinawa-20260912.ts');
+test('Okinawa editions have valid dated facts and import into printable plans', () => {
+  assert.ok(okinawaRaceData.length >= 90);
+  for (const r of okinawaRaceData) {
+    assert.equal(r.prefecture, '沖縄県');
+    assert.ok([2026,2027].includes(r.year));
+    assert.equal(new Date(r.eventDate).toISOString().slice(0,10), r.eventDate);
+    assert.equal(Number(r.eventDate.slice(0,4)), r.year);
+    assert.ok(r.distanceKm > 0 && r.distanceKm <= 1000);
+    assert.ok(r.sources.length && r.sources.every(s => new URL(s.url).protocol === 'https:'));
+    assert.ok(r.checkpoints.every(g => g.distanceKm > 0 && g.distanceKm < r.distanceKm));
+    const before = JSON.stringify(r);
+    const p = planFromRace(r);
+    assert.equal(p.distance, String(r.distanceKm));
+    assert.equal(p.date, r.eventDate);
+    assert.equal(p.startTime, r.startTime || '');
+    assert.equal(p.limit, r.timeLimitMinutes ? elapsed(r.timeLimitMinutes*60) : '');
+    // Supply a runner's goal and the missing start solely for export testing.
+    const q = {...p, startTime:p.startTime || '09:00', target:elapsed(Math.floor(r.distanceKm * Math.min(360, ...(r.timeLimitMinutes ? [r.timeLimitMinutes*60/r.distanceKm*0.75] : []), ...r.checkpoints.map(g=>g.elapsedLimitMinutes*60/g.distanceKm*0.75)))), style:'even', cardMode:'single'};
+    assert.deepEqual(calculate(q).errors, [], r.id);
+    const html = buildCardHtml(q);
+    assert.ok(html.includes(r.name), r.id);
+    assert.ok(!/NaN|Infinity/.test(html), r.id);
+    assert.equal(JSON.stringify(r), before);
+  }
+});
+test('Okinawa course changes remain edition-specific without standard-distance rounding', () => {
+  const find = (key, year, km) => okinawaRaceData.find(r => r.slug.startsWith(key) && r.year===year && r.distanceKm===km);
+  assert.ok(find('iheya-moonlight',2026,24));
+  assert.ok(find('itoman-heiwa',2026,21.025));
+  assert.ok(find('miyako-17end',2026,21));
+  assert.ok(find('tarama',2026,23.75));
+  assert.ok(find('nago',2026,20));
+  assert.ok(find('nago',2027,21.0975));
+  assert.deepEqual(find('ishigaki',2026,42.195).checkpoints.map(g=>g.distanceKm),[21.0975,35]);
+  assert.deepEqual(find('ishigaki',2027,42.195).checkpoints.map(g=>g.distanceKm),[21.0975,34]);
+  assert.equal(filterRaces(okinawaRaceData,'沖縄県','','２０２７').length, okinawaRaceData.filter(r=>r.year===2027).length);
+});
+test('unknown and conflicting Okinawa times stay blank, multi-day gates retain day offsets', () => {
+  for(const r of okinawaRaceData.filter(r=>r.slug.startsWith('tarama') && [3,5,10].includes(r.distanceKm))) assert.equal(planFromRace(r).limit,'');
+  assert.equal(planFromRace(okinawaRaceData.find(r=>r.slug==='iheya-trail-2026-6')).startTime,'');
+  const p=planFromRace(okinawaRaceData.find(r=>r.distanceKm===400));
+  assert.equal(p.limit,'72:00:00');
+  assert.deepEqual(p.gates.map(g=>[g.time,g.day]),[['17:00:00','0'],['00:00:00','1'],['12:00:00','1'],['12:00:00','2']]);
+  assert.deepEqual(calculate({...p,target:'70:00:00'}).errors,[]);
+  assert.throws(()=>buildCardHtml({...p,target:'70:00:00',cardMode:'single'}), /締切/);
+  assert.ok(buildCardHtml({...p,target:'40:00:00',cardMode:'single'}).includes('40:00:00'));
+});
+
 (async () => {
   let failed = 0;
   for (const t of tests) {
