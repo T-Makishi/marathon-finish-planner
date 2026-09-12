@@ -1,4 +1,9 @@
 import type { PlannerSettings } from "./settings";
+export const COMPARISON_GOALS = [
+  { label: "挑戦目標", short: "挑戦" },
+  { label: "本命目標", short: "本命" },
+  { label: "堅実目標", short: "堅実" },
+] as const;
 export type PaceStyle =
   | "even"
   | "negative-5"

@@ -1,4 +1,4 @@
-import { Plan, PACE_STYLES } from "./model";
+import { Plan, PACE_STYLES, COMPARISON_GOALS } from "./model";
 import { calculate, Calculation, cardPoints, pointLabel, elapsed, clockText, marginText, paceText, numberValue, duration } from "./engine";
 
 export const htmlEscape = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -23,7 +23,11 @@ export function exportProblems(plan: Plan): string[] {
   if (plan.cardTerrain && plan.terrain.some(t => t.memo.length > 120)) errors.push('印刷するコースメモは120文字以内にしてください。');
   if (!result.canPrint && !errors.length) errors.push('締切を超える、または締切ちょうどの計画です。配分を見直してください。');
   if (plan.migrationNotes.length) errors.push('移行した計画を確認してから出力してください。');
-  if (plan.cardMode !== 'single') comparisonResults(plan).forEach((r, i) => { if (r.errors.length || !r.canPrint) errors.push(`比較案${i + 1}：${r.errors[0] || '締切超過または締切境界です。'}`); });
+  if (plan.cardMode !== 'single') comparisonResults(plan).forEach((r, i) => { if (r.errors.length || !r.canPrint) errors.push(`${COMPARISON_GOALS[i].label}：${r.errors[0] || '締切超過または締切境界です。'}`); });
+  if (plan.cardMode !== 'single') {
+    const times = plan.comparison.map(duration);
+    if (times.every(Number.isFinite) && !(times[0] < times[1] && times[1] < times[2])) errors.push('比較目標は、挑戦目標・本命目標・堅実目標の順にタイムを長くしてください。');
+  }
   return errors;
 }
 export type CarryCard = { kind: 'single' | 'compare'; width: number; height: number; points: number[]; part: number; parts: number };
@@ -65,7 +69,7 @@ export function buildPrintLayout(plan: Plan): PrintLayout {
   }
   const pages: PrintPage[] = chunks(cards, isWrist ? 3 : 2).map(cards => ({ kind: 'cards', cards }));
   const result = calculate(plan), results = plan.cardMode === 'single' ? [result] : plan.cardMode === 'compare' ? comparisonResults(plan) : [result, ...comparisonResults(plan)];
-  const resultLabels = plan.cardMode === 'single' ? ['本番案'] : plan.cardMode === 'compare' ? ['比較A', '比較B', '比較C'] : ['本番案', '比較A', '比較B', '比較C'];
+  const resultLabels = plan.cardMode === 'single' ? ['本番案'] : plan.cardMode === 'compare' ? COMPARISON_GOALS.map(g => g.label) : ['本番案', ...COMPARISON_GOALS.map(g => g.label)];
   const warnings: string[] = [];
   if (plan.cardMode !== 'single' && plan.cardFormat === 'wrist') warnings.push('比較カードを含むため、すべて85 × 135mmのポケットサイズで出力します。');
   if (plan.cardGates) {
@@ -96,7 +100,7 @@ export function buildCardHtml(plan: Plan, createdAt = new Date().toISOString(), 
     const totals = values.map(r => elapsed(printedTotal(plan, r)));
     const other = plan.cardClock === 'gun' ? `ネット ${elapsed(result.actualNet)}` : `号砲から ${elapsed(result.actualGun)}`;
     const cols = c.kind === 'single' ? '<col style="width:35%"><col style="width:65%">' : '<col style="width:22%"><col style="width:26%"><col style="width:26%"><col style="width:26%">';
-    return `<section class="carry ${c.kind}${c.width === 50 ? ' wrist' : ''}" data-card="${c.kind}" style="width:${c.width}mm;height:${c.height}mm"><div class="card-head"><div class="eyebrow">${c.kind === 'single' ? '当日のペースカード' : '3案比較カード'} ${c.parts > 1 ? `${c.part}/${c.parts}` : ''}</div><h2>${esc(plan.raceName)}</h2><div class="date">${esc(plan.date || '開催日未入力')}</div></div><div class="card-summary"><div class="basis">${esc(basis)}</div>${c.kind === 'single' ? `<strong class="finish-time">${totals[0]}</strong><span class="other-time">${esc(other)}</span>` : `<div class="comparison-goals">${totals.map((t, i) => `<span><small>${['A', 'B', 'C'][i]}</small><b>${t}</b></span>`).join('')}</div>`}</div><table class="pace"><colgroup>${cols}</colgroup><thead><tr><th>距離</th>${c.kind === 'single' ? '<th>累計時間</th>' : '<th>A</th><th>B</th><th>C</th>'}</tr></thead><tbody>${c.points.map(p => `<tr data-point="${p}"><th>${esc(pointLabel(p / 1e6, numberValue(plan.distance)))}</th>${values.map(r => `<td>${cardTime(plan, r, p)}</td>`).join('')}</tr>`).join('')}</tbody></table><div class="card-foot">${esc(PACE_STYLES.find(s => s.id === plan.style)!.label)}${c.kind === 'single' ? ` · 移動平均 ${paceText(result.averagePace)}/km` : ''}<br>RUN FINISH PLANNER</div></section>`;
+    return `<section class="carry ${c.kind}${c.width === 50 ? ' wrist' : ''}" data-card="${c.kind}" style="width:${c.width}mm;height:${c.height}mm"><div class="card-head"><div class="eyebrow">${c.kind === 'single' ? '当日のペースカード' : '3案比較カード'} ${c.parts > 1 ? `${c.part}/${c.parts}` : ''}</div><h2>${esc(plan.raceName)}</h2><div class="date">${esc(plan.date || '開催日未入力')}</div></div><div class="card-summary"><div class="basis">${esc(basis)}</div>${c.kind === 'single' ? `<strong class="finish-time">${totals[0]}</strong><span class="other-time">${esc(other)}</span>` : `<div class="comparison-goals">${totals.map((t, i) => `<span><small>${COMPARISON_GOALS[i].label}</small><b>${t}</b></span>`).join('')}</div>`}</div><table class="pace"><colgroup>${cols}</colgroup><thead><tr><th>距離</th>${c.kind === 'single' ? '<th>累計時間</th>' : COMPARISON_GOALS.map(g => `<th>${g.short}</th>`).join('')}</tr></thead><tbody>${c.points.map(p => `<tr data-point="${p}"><th>${esc(pointLabel(p / 1e6, numberValue(plan.distance)))}</th>${values.map(r => `<td>${cardTime(plan, r, p)}</td>`).join('')}</tr>`).join('')}</tbody></table><div class="card-foot">${esc(PACE_STYLES.find(s => s.id === plan.style)!.label)}${c.kind === 'single' ? ` · 移動平均 ${paceText(result.averagePace)}/km` : ''}<br>RUN FINISH PLANNER</div></section>`;
   };
   const renderedPages = layout.pages.map((page, index) => {
     if (options.previewPage !== undefined && index !== options.previewPage) return '';

@@ -591,6 +591,17 @@ test('past events are labeled by edition instead of current verification', () =>
   assert.match(raceDataLabel(domesticRaceData[0], '2026-09-12'), /2026年.*開催済み/);
   assert.match(raceDataLabel(domesticRaceData.find(r => r.slug === 'osaka-half-21.0975'), '2026-09-12'), /基本情報/);
 });
+test('comparison goals have consistent labels and require ascending target times', () => {
+  const p = plan({ cardMode: 'compare' });
+  const html = buildCardHtml(p);
+  for (const label of ['挑戦目標', '本命目標', '堅実目標', '<th>挑戦</th>', '<th>本命</th>', '<th>堅実</th>']) assert.ok(html.includes(label));
+  assert.ok(!html.includes('比較A'));
+  for (const comparison of [['3:35:00','3:30:00','3:25:00'], ['3:30:00','3:30:00','3:35:00']]) {
+    assert.ok(exportProblems({ ...p, comparison }).some(e => e.includes('順にタイムを長く')));
+  }
+  assert.ok(!exportProblems(p).some(e => e.includes('順にタイムを長く')));
+  assert.ok(!exportProblems({ ...p, cardMode: 'single', comparison: ['3:35:00','3:30:00','3:25:00'] }).some(e => e.includes('順にタイムを長く')));
+});
 (async () => {
   let failed = 0;
   for (const t of tests) {

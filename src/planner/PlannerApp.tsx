@@ -1,3 +1,4 @@
+import { COMPARISON_GOALS } from "./model";
 import { planFromRace } from "./racePlan";
 import SelectField from "./SelectField";
 import { PREFECTURES, CATEGORIES, filterRaces, raceDataLabel } from "./catalog";
@@ -1186,8 +1187,10 @@ function Planner() {
                   <Choices value={plan.cardMode} options={[{ id: "single", label: "本番案だけ" }, { id: "compare", label: "3案比較だけ" }, { id: "both", label: "本番案＋3案比較" }]} onChange={v => patch({ cardMode: v, ...(v !== "single" ? { cardFormat: "pocket" as const } : {}) })} />
                   {plan.cardMode !== "single" && <>
                     <Text style={s.hint}>比較する目標は{plan.timeBasis === "net" ? "ネットタイム" : "号砲基準"}で入力します。印刷する表と見出しは、下で選ぶ時間基準に統一します。</Text>
-                    <View style={s.wrap}>{plan.comparison.map((time, i) => <Field small key={i} label={`比較${["A", "B", "C"][i]}（時:分:秒）`} value={time} onChange={v => { const values = [...plan.comparison] as Plan["comparison"]; values[i] = v; edit("comparison", values); }} />)}</View>
-                    <Button title="現在の目標を中心に±5分で設定" secondary onPress={() => { const seconds = plan.timeBasis === "gun" ? result.actualGun : result.actualNet; if (Number.isFinite(seconds) && seconds > 300) edit("comparison", [elapsed(seconds - 300), elapsed(seconds), elapsed(seconds + 300)]); }} />
+                    <Text style={s.hint}>挑戦：好条件で狙う目標 ／ 本命：比較の中心となる目標 ／ 堅実：状況に応じて切り替える目標。左から順にタイムを長く設定します。</Text>
+                    <View style={s.wrap}>{plan.comparison.map((time, i) => <Field small key={i} label={`${COMPARISON_GOALS[i].label}（時:分:秒）`} value={time} onChange={v => { const values = [...plan.comparison] as Plan["comparison"]; values[i] = v; edit("comparison", values); }} />)}</View>
+                    <Text style={s.hint}>比較目標は本番案とは別に設定できます。本番案の目標を本命にする場合は、下のボタンを押してください。</Text>
+                    <Button title="本番案の目標を本命にして±5分で設定" secondary onPress={() => { const seconds = plan.timeBasis === "gun" ? result.actualGun : result.actualNet; if (Number.isFinite(seconds) && seconds > 300) edit("comparison", [elapsed(seconds - 300), elapsed(seconds), elapsed(seconds + 300)]); }} />
                   </>}
                   {plan.cardMode === "single" ? <Choices value={plan.cardFormat} options={[{ id: "pocket", label: "ポケット 85 × 135mm" }, { id: "wrist", label: "手首用 50 × 180mm" }]} onChange={v => edit("cardFormat", v)} /> : <Text style={s.body}>サイズ：85 × 135mm（比較の3列が読めるポケットサイズ）</Text>}
                   <Text style={s.hint}>フルマラソンの主要11地点を1枚に収めます。「本番案＋3案比較」は同じ大きさの2枚をA4の1ページに並べます。</Text>
@@ -1318,7 +1321,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.1.0</Text>
+              <Text style={s.body}>RUN Finish Planner 2.1.1</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary
