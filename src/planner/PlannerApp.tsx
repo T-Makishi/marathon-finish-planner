@@ -758,7 +758,7 @@ function Planner() {
                       <Button
                         title="制限時間・関門を設定"
                         secondary
-                        onPress={() => { setCourseSections(old => ({ ...old, terrain: true })); move("大会"); }}
+                        onPress={() => { setCourseSections(old => ({ ...old, gates: true })); move("大会"); }}
                       />
                     </>
                   )}
@@ -1435,7 +1435,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.2.19</Text>
+              <Text style={s.body}>RUN Finish Planner 2.2.20</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary
@@ -1466,7 +1466,7 @@ function Planner() {
             <SelectField label="距離種別" value={category} onChange={v => { setCategory(v); setExpandedRace(null); }} options={CATEGORIES} />
             <Field label="大会名で検索" value={search} onChange={v => { setSearch(v); setExpandedRace(null); }} />
             <Text style={s.hint}>該当 {filteredRaces.length}件 ／ 登録 {OFFICIAL_RACE_DATA.filter(r => r.publicationAllowed !== false).length}種目。全国全大会の網羅ではありません。</Text>
-            {!filteredRaces.length && <Text style={s.body}>該当する大会は登録されていません。条件を変更するか、「空の計画を追加」から登録できます。</Text>}
+            {!filteredRaces.length && <Text style={s.body}>該当する大会は登録されていません。条件を変更するか、一覧を閉じて「大会を新規登録」から登録できます。</Text>}
             {filteredRaces.map(r => <View key={r.id} style={{ borderBottomWidth: 1, borderColor: '#d4ddd5', paddingVertical: 4 }}>
               <Pressable accessibilityRole="button" accessibilityLabel={`${r.name} ${r.distanceKm}km の詳細`} accessibilityState={{ expanded: expandedRace === r.id }} onPress={() => setExpandedRace(expandedRace === r.id ? null : r.id)} style={{ paddingVertical: 12, flexDirection: 'row', gap: 10 }}>
                 <View style={{ flex: 1 }}><Text style={[s.label, { fontSize: 16 }]}>{r.name}</Text><Text style={s.hint}>{r.prefecture} · {r.distanceKm}km{r.year ? ` · ${r.year}年` : ''}</Text></View><Text>{expandedRace === r.id ? '▴' : '▾'}</Text>
