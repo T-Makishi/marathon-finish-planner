@@ -1299,9 +1299,9 @@ function Planner() {
                     <Text style={s.hint}>比較目標は本番案とは別に設定できます。本番案の目標を本命にする場合は、下のボタンを押してください。</Text>
                     <Button title="本番案の目標を本命にして±5分で設定" secondary onPress={() => { const seconds = plan.timeBasis === "gun" ? result.actualGun : result.actualNet; if (Number.isFinite(seconds) && seconds > 300) edit("comparison", [elapsed(seconds - 300), elapsed(seconds), elapsed(seconds + 300)]); }} />
                   </>}
-                  {plan.cardMode === "single" ? <Choices value={plan.cardFormat} options={[{ id: "pocket", label: "ポケット 85 × 135mm" }, { id: "wrist", label: "手首用 50 × 180mm" }]} onChange={v => edit("cardFormat", v)} /> : <Text style={s.body}>サイズ：85 × 135mm（比較の3列が読めるポケットサイズ）</Text>}
-                  <Choices value={plan.cardPointMode} options={[{ id: "compact", label: "1枚に最適化（推奨）" }, { id: "all", label: "全地点を表示" }]} onChange={v => edit("cardPointMode", v)} />
-                  <Text style={s.hint}>{plan.cardPointMode === "compact" ? "1km・関門・中間点・ゴール直前・ゴールを優先し、通常地点を自動整理します。必須地点だけで収まらない場合は複数枚に分けます。" : "主要地点と登録関門をすべて表示し、収まらない場合は複数枚に分けます。"}「本番案＋3案比較」は表裏の2面をつなげて印刷します。</Text>
+                  {plan.cardMode === "single" ? <Choices value={plan.cardFormat} options={[{ id: "pocket", label: "ポケット（幅85mm・高さ自動）" }, { id: "wrist", label: "手首用 50 × 180mm" }]} onChange={v => edit("cardFormat", v)} /> : <Text style={s.body}>サイズ：幅85mm × 高さ{printLayout?.height || 135}mm（内容に合わせて自動調整）</Text>}
+                  {plan.intent === "finish" ? <Text style={s.body}>制限完走の計画では、携帯カードに関門を表示します。</Text> : <Toggle label="携帯カードに関門を表示" value={plan.showGates} onChange={v => edit("showGates", v)} />}
+                  <Text style={s.hint}>1km・5km・10km以降5km刻み・中間点・ゴールをすべて表示します。関門表示がONの場合は登録関門も追加し、文字サイズを変えずにカードの高さを最大195mmまで延長します。</Text>
                   <Choices value={plan.cardClock} options={[{ id: "net", label: "ネット累計で印刷" }, { id: "gun", label: "号砲からの累計で印刷" }]} onChange={v => edit("cardClock", v)} />
                   <Text style={s.body}>本番案の印刷ゴール：{elapsed(printedTotal(plan, result))}（{plan.cardClock === "net" ? "ネット" : "号砲から"}）</Text>
                 </Panel>
@@ -1316,7 +1316,7 @@ function Planner() {
                 <Panel title="3. 印刷される内容を確認">
                   <Text style={s.heading}>A4縦 {printLayout?.pages.length || 0}ページ</Text>
                   <Text style={s.body}>携帯カード {printLayout?.cardCount || 0}枚 ／ 追加資料 {printLayout?.detailCount || 0}ページ</Text>
-                  <Text style={s.hint}>{plan.cardMode === "both" ? "広げて170 × 135mm → 二つ折りで85 × 135mm。外周の破線は切り取り線、中央の実線は折り線（切らない）です。" : `${printLayout?.width} × ${printLayout?.height}mm。外周の破線が切り取り線です。`}</Text>
+                  <Text style={s.hint}>{plan.cardMode === "both" ? `広げて170 × ${printLayout?.height || 135}mm → 二つ折りで85 × ${printLayout?.height || 135}mm。外周の破線は切り取り線、中央の実線は折り線（切らない）です。` : `${printLayout?.width} × ${printLayout?.height}mm。外周の破線が切り取り線です。`}</Text>
                   <PrintPreview plan={plan} />
                 </Panel>
                 <Button
@@ -1432,7 +1432,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.2.12</Text>
+              <Text style={s.body}>RUN Finish Planner 2.2.13</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary

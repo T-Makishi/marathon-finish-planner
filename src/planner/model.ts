@@ -82,7 +82,6 @@ export type Plan = {
   cardMode: "single" | "compare" | "both";
   cardFormat: "pocket" | "wrist";
   cardClock: "net" | "gun";
-  cardPointMode: "compact" | "all";
   cardGates: boolean;
   cardNotes: boolean;
   cardTerrain: boolean;
@@ -143,7 +142,6 @@ export function newPlan(): Plan {
     cardMode: "single",
     cardFormat: "pocket",
     cardClock: "net",
-    cardPointMode: "compact",
     cardGates: false,
     cardNotes: true,
     cardTerrain: false,
