@@ -54,7 +54,8 @@ function validatePlan(p: unknown): p is Plan {
     !["goal", "fixed"].includes(p.adjustmentMode) ||
     !["single", "compare", "both"].includes(p.cardMode) ||
     !["pocket", "wrist"].includes(p.cardFormat) ||
-    !["net", "gun"].includes(p.cardClock)
+    !["net", "gun"].includes(p.cardClock) ||
+    !["compact", "all"].includes(p.cardPointMode)
   )
     return false;
   for (const [key, fields] of Object.entries({
@@ -88,7 +89,29 @@ function validatePlan(p: unknown): p is Plan {
 export function parseStore(text: string): PlannerStore {
   if (new TextEncoder().encode(text).length > MAX_BACKUP_BYTES)
     throw new Error("バックアップは20MB以下にしてください。");
-  const s: unknown = JSON.parse(text);
+  const parsed: unknown = JSON.parse(text);
+  const upgradePlan = (plan: unknown) =>
+    object(plan) && plan.cardPointMode === undefined
+      ? { ...plan, cardPointMode: "compact" }
+      : plan;
+  const s: unknown = object(parsed)
+    ? {
+        ...parsed,
+        plans: Array.isArray(parsed.plans)
+          ? parsed.plans.map(upgradePlan)
+          : parsed.plans,
+        trash: Array.isArray(parsed.trash)
+          ? parsed.trash.map(upgradePlan)
+          : parsed.trash,
+        snapshots: Array.isArray(parsed.snapshots)
+          ? parsed.snapshots.map((snapshot) =>
+              object(snapshot)
+                ? { ...snapshot, plan: upgradePlan(snapshot.plan) }
+                : snapshot,
+            )
+          : parsed.snapshots,
+      }
+    : parsed;
   if (
     !object(s) ||
     s.schemaVersion !== 2 ||
@@ -215,6 +238,7 @@ export function migrateLegacy(raw: unknown): PlannerStore {
 /** Keep usable plans/settings; discard obsolete duplicated data after conversion. */
 export function compactStore(store: PlannerStore): PlannerStore {
   const cleanPlan = (p: Plan): Plan => ({ ...p,
+    cardPointMode: p.cardPointMode ?? 'compact',
     name: /^(旧版からの移行|9番から引き継ぎ)$/.test(p.name) ? 'プランA' : p.name,
     sourceStatus: /^旧版/.test(p.sourceStatus) ? '入力した大会情報' : p.sourceStatus,
     migrationNotes: [],

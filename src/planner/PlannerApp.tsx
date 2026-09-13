@@ -1300,7 +1300,8 @@ function Planner() {
                     <Button title="本番案の目標を本命にして±5分で設定" secondary onPress={() => { const seconds = plan.timeBasis === "gun" ? result.actualGun : result.actualNet; if (Number.isFinite(seconds) && seconds > 300) edit("comparison", [elapsed(seconds - 300), elapsed(seconds), elapsed(seconds + 300)]); }} />
                   </>}
                   {plan.cardMode === "single" ? <Choices value={plan.cardFormat} options={[{ id: "pocket", label: "ポケット 85 × 135mm" }, { id: "wrist", label: "手首用 50 × 180mm" }]} onChange={v => edit("cardFormat", v)} /> : <Text style={s.body}>サイズ：85 × 135mm（比較の3列が読めるポケットサイズ）</Text>}
-                  <Text style={s.hint}>主要地点と登録した関門を表示し、地点が多い場合は複数枚に分けます。「本番案＋3案比較」は表裏の2面をつなげて印刷します。外周だけを切り取り、中央は切らず、印刷面を外側にして山折りします。</Text>
+                  <Choices value={plan.cardPointMode} options={[{ id: "compact", label: "1枚に最適化（推奨）" }, { id: "all", label: "全地点を表示" }]} onChange={v => edit("cardPointMode", v)} />
+                  <Text style={s.hint}>{plan.cardPointMode === "compact" ? "1km・関門・中間点・ゴール直前・ゴールを優先し、通常地点を自動整理します。必須地点だけで収まらない場合は複数枚に分けます。" : "主要地点と登録関門をすべて表示し、収まらない場合は複数枚に分けます。"}「本番案＋3案比較」は表裏の2面をつなげて印刷します。</Text>
                   <Choices value={plan.cardClock} options={[{ id: "net", label: "ネット累計で印刷" }, { id: "gun", label: "号砲からの累計で印刷" }]} onChange={v => edit("cardClock", v)} />
                   <Text style={s.body}>本番案の印刷ゴール：{elapsed(printedTotal(plan, result))}（{plan.cardClock === "net" ? "ネット" : "号砲から"}）</Text>
                 </Panel>
@@ -1431,7 +1432,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.2.11</Text>
+              <Text style={s.body}>RUN Finish Planner 2.2.12</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary

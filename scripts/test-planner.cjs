@@ -385,6 +385,7 @@ test("nearby gates appear in carry cards with pagination and supplemental detail
     gates: [gate(10.1, "12:00"), gate(10.2, "12:00")],
     stops: [stop(12.3, 30)],
     cardGates: true,
+    cardPointMode: "all",
   });
   const points = displayPoints(p);
   assert.equal(points.length, 13);
@@ -556,6 +557,31 @@ test("marathon carry cards keep all eleven points on one A4 page", () => {
     assert.equal(layout.pages[0].cards[0].points.length, 11);
     assert.equal(layout.width, cardFormat === 'wrist' ? 50 : 85);
   }
+});
+test("compact card keeps gates, midpoint and finish on one carry card", () => {
+  const gates = [gate(9, "16:00"), gate(19, "16:00"), gate(29, "16:00")];
+  const compact = plan({ gates, cardPointMode: "compact", cardNotes: false, cardTerrain: false });
+  const points = displayPoints(compact);
+  for (const km of [9, 19, 29]) assert.ok(points.includes(km * 1e6));
+  assert.ok(points.includes(1000000));
+  assert.ok(points.includes(40000000));
+  assert.ok(points.includes(21097500));
+  assert.ok(points.includes(42195000));
+  const compactLayout = buildPrintLayout(compact);
+  assert.equal(compactLayout.cardCount, 1);
+  assert.ok(compactLayout.warnings.some(message => message.includes("通常地点を")));
+  const allLayout = buildPrintLayout({ ...compact, cardPointMode: "all" });
+  assert.ok(allLayout.cardCount > 1);
+  assert.ok(displayPoints(compact).length < displayPoints({ ...compact, cardPointMode: "all" }).length);
+});
+test("compact card never drops gates when mandatory rows require multiple cards", () => {
+  const gates = Array.from({ length: 8 }, (_, index) => gate(3 + index * 5, "16:00"));
+  const compact = plan({ gates, cardPointMode: "compact", cardNotes: false, cardTerrain: false });
+  const points = displayPoints(compact);
+  for (const item of gates) assert.ok(points.includes(Number(item.km) * 1e6));
+  const layout = buildPrintLayout(compact);
+  assert.ok(layout.cardCount > 1);
+  assert.ok(layout.warnings.some(message => message.includes("関門を欠落させず")));
 });
 test("main and comparison have matching dimensions even for saved wrist setting", () => {
   const layout = buildPrintLayout(plan({ cardMode: 'both', cardFormat: 'wrist', cardGates: false, cardNotes: false, cardTerrain: false }));
@@ -773,6 +799,14 @@ test('carry cards always show exact gate distances and deadlines on both faces',
   assert.ok(html.includes('class="finish-pair"'));
   const matching = { ...p, gates: [gate(10,'11:00')] };
   assert.equal(displayPoints(matching).filter(x => x === 10000000).length, 1);
+});
+test('existing saved plans receive compact card mode without losing data', () => {
+  const existing = newStore();
+  existing.plans[0].raceName = '保存済み大会';
+  delete existing.plans[0].cardPointMode;
+  const restored = parseStore(JSON.stringify(existing));
+  assert.equal(restored.plans[0].cardPointMode, 'compact');
+  assert.equal(restored.plans[0].raceName, '保存済み大会');
 });
 test('existing v2 cleanup rewrites both copies, preserves opening image and clears source keys', async () => {
   const { digest } = require('../src/planner/storage.ts');

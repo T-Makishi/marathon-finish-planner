@@ -10,7 +10,40 @@ export function comparisonResults(plan: Plan): Calculation[] {
 // Carry cards include standard pace points and registered checkpoints.
 function gatesAt(plan: Plan, point: number) { return plan.gates.filter(g => Math.round(numberValue(g.km) * 1e6) === point); }
 function pointHeight(plan: Plan, point: number, wrist: boolean) { return (wrist ? 6.5 : 5.2) + gatesAt(plan, point).length * 3.2; }
-export function displayPoints(plan: Plan): number[] { return [...new Set([...cardPoints(numberValue(plan.distance)), ...plan.gates.map(g => Math.round(numberValue(g.km) * 1e6))])].sort((a, b) => a - b); }
+export function allDisplayPoints(plan: Plan): number[] { return [...new Set([...cardPoints(numberValue(plan.distance)), ...plan.gates.map(g => Math.round(numberValue(g.km) * 1e6))])].sort((a, b) => a - b); }
+export function displayPoints(plan: Plan): number[] {
+  const all = allDisplayPoints(plan);
+  if (plan.cardPointMode === 'all') return all;
+  const distance = numberValue(plan.distance);
+  const standard = cardPoints(distance);
+  const finish = Math.round(distance * 1e6);
+  const lastBeforeFinish = [...standard].reverse().find(point => point < finish);
+  const mandatory = new Set([
+    finish,
+    Math.round(distance * 5e5),
+    standard[0],
+    lastBeforeFinish,
+    ...plan.gates.map(g => Math.round(numberValue(g.km) * 1e6)),
+  ].filter((point): point is number => point !== undefined));
+  const selected = all.filter(point => mandatory.has(point));
+  const isWrist = plan.cardMode === 'single' && plan.cardFormat === 'wrist';
+  const budget = isWrist ? 78 : 60.5;
+  let used = selected.reduce((sum, point) => sum + pointHeight(plan, point, isWrist), 0);
+  const candidates = all.filter(point => !mandatory.has(point));
+  while (candidates.length) {
+    const fitting = candidates.filter(point => used + pointHeight(plan, point, isWrist) <= budget + 0.001);
+    if (!fitting.length) break;
+    const nearestDistance = (point: number) => selected.length
+      ? Math.min(...selected.map(chosen => Math.abs(chosen - point)))
+      : Infinity;
+    fitting.sort((a, b) => nearestDistance(b) - nearestDistance(a) || a - b);
+    const chosen = fitting[0];
+    selected.push(chosen);
+    used += pointHeight(plan, chosen, isWrist);
+    candidates.splice(candidates.indexOf(chosen), 1);
+  }
+  return selected.sort((a, b) => a - b);
+}
 export function cardTime(plan: Plan, result: Calculation, point: number): string {
   if (point === 0) return elapsed(plan.cardClock === 'gun' ? result.start - result.gun : 0);
   const row = result.rows.find(r => r.mm === point);
@@ -96,6 +129,9 @@ export function buildPrintLayout(plan: Plan): PrintLayout {
   const result = calculate(plan), results = plan.cardMode === 'single' ? [result] : plan.cardMode === 'compare' ? comparisonResults(plan) : [result, ...comparisonResults(plan)];
   const resultLabels = plan.cardMode === 'single' ? ['本番案'] : plan.cardMode === 'compare' ? COMPARISON_GOALS.map(g => g.label) : ['本番案', ...COMPARISON_GOALS.map(g => g.label)];
   const warnings: string[] = [];
+  const omittedPoints = allDisplayPoints(plan).length - displayPoints(plan).length;
+  if (plan.cardPointMode !== 'all' && omittedPoints > 0) warnings.push(`1枚に最適化するため、関門ではない通常地点を${omittedPoints}件省略しました。`);
+  if (plan.cardPointMode !== 'all' && groups.length > 1) warnings.push('関門などの必須地点だけで1枚の表示範囲を超えるため、関門を欠落させず複数枚に分けました。');
   const details: DetailTable[] = [];
   if (plan.cardMode !== 'single' && plan.cardFormat === 'wrist') warnings.push('比較カードを含むため、すべて85 × 135mmのポケットサイズで出力します。');
   if (plan.cardGates) {
