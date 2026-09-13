@@ -1291,7 +1291,7 @@ function Planner() {
             {tab === "カード" && (
               <>
                 <Panel title="1. 印刷するカード">
-                  <Choices value={plan.cardMode} options={[{ id: "single", label: "本番案だけ" }, { id: "compare", label: "3案比較だけ" }, { id: "both", label: "本番案＋3案比較" }]} onChange={v => patch({ cardMode: v, ...(v !== "single" ? { cardFormat: "pocket" as const } : {}) })} />
+                  <Choices value={plan.cardMode} options={[{ id: "single", label: "本番案だけ" }, { id: "compare", label: "3案比較だけ" }, { id: "both", label: "本番案＋3案比較" }]} onChange={v => edit("cardMode", v)} />
                   {plan.cardMode !== "single" && <>
                     <Text style={s.hint}>比較する目標は{plan.timeBasis === "net" ? "ネットタイム" : "号砲基準"}で入力します。印刷する表と見出しは、下で選ぶ時間基準に統一します。</Text>
                     <Text style={s.hint}>挑戦：好条件で狙う目標 ／ 本命：比較の中心となる目標 ／ 堅実：状況に応じて切り替える目標。左から順にタイムを長く設定します。</Text>
@@ -1299,14 +1299,15 @@ function Planner() {
                     <Text style={s.hint}>比較目標は本番案とは別に設定できます。本番案の目標を本命にする場合は、下のボタンを押してください。</Text>
                     <Button title="本番案の目標を本命にして±5分で設定" secondary onPress={() => { const seconds = plan.timeBasis === "gun" ? result.actualGun : result.actualNet; if (Number.isFinite(seconds) && seconds > 300) edit("comparison", [elapsed(seconds - 300), elapsed(seconds), elapsed(seconds + 300)]); }} />
                   </>}
-                  {plan.cardMode === "single" ? <Choices value={plan.cardFormat} options={[{ id: "pocket", label: "ポケット（幅85mm・高さ自動）" }, { id: "wrist", label: "手首用 50 × 180mm" }]} onChange={v => edit("cardFormat", v)} /> : <Text style={s.body}>サイズ：幅85mm × 高さ{printLayout?.height || 135}mm（内容に合わせて自動調整）</Text>}
+                  <Choices value={plan.cardFormat} options={[{ id: "pocket", label: "ポケット（幅85mm・高さ自動）" }, { id: "wrist", label: "手首用" }]} onChange={v => edit("cardFormat", v)} />
+                  {plan.cardFormat === "wrist" && <Text style={s.hint}>手首用は「本番案だけ」で累計時間、「3案比較だけ」で挑戦・本命・堅実目標を印刷します。両方を選ぶと別々のカードになります。本番案は幅50mm、比較は幅70mm、高さ180〜195mmです。配分説明と移動平均は印刷しません。</Text>}
                   {plan.intent === "finish" ? <Text style={s.body}>制限完走の計画では、携帯カードに関門を表示します。</Text> : <Toggle label="携帯カードに関門を表示" value={plan.showGates} onChange={v => edit("showGates", v)} />}
                   <Text style={s.hint}>1km・5km・10km以降5km刻み・中間点・ゴールをすべて表示します。関門表示がONの場合は登録関門も追加し、文字サイズを変えずにカードの高さを最大195mmまで延長します。</Text>
                   <Choices value={plan.cardClock} options={[{ id: "net", label: "ネット累計で印刷" }, { id: "gun", label: "号砲からの累計で印刷" }]} onChange={v => edit("cardClock", v)} />
                   <Text style={s.body}>本番案の印刷ゴール：{elapsed(printedTotal(plan, result))}（{plan.cardClock === "net" ? "ネット" : "号砲から"}）</Text>
                 </Panel>
                 <Panel title="2. 必要な追加資料だけ選ぶ">
-                  <Text style={s.hint}>登録した関門は携帯カードに表示します。詳細な確認表・補給・補正の設定は、必要な場合に追加できます。内容が少ない資料は同じ用紙にまとめます。</Text>
+                  <Text style={s.hint}>関門は上の表示設定に従ってカードに表示します。詳細な確認表・補給・補正の設定は、必要な場合に追加できます。内容が少ない資料は同じ用紙にまとめます。</Text>
                   <Toggle label="関門・制限時間の確認表を追加" value={plan.cardGates} onChange={v => edit("cardGates", v)} />
                   <Toggle label="補給・停止の計画を追加" value={plan.cardNotes} onChange={v => edit("cardNotes", v)} hint={plan.stops.length ? `${plan.stops.length}件の停止を別紙に印刷します。` : "停止が未登録のため、追加ページは作りません。"} />
                   <Toggle label="コース補正の設定表を追加" value={plan.cardTerrain} onChange={v => edit("cardTerrain", v)} hint={plan.terrain.length ? `${plan.terrain.length}区間の設定を別紙に印刷します。` : "補正区間が未登録のため、追加ページは作りません。"} />
@@ -1316,7 +1317,7 @@ function Planner() {
                 <Panel title="3. 印刷される内容を確認">
                   <Text style={s.heading}>A4縦 {printLayout?.pages.length || 0}ページ</Text>
                   <Text style={s.body}>携帯カード {printLayout?.cardCount || 0}枚 ／ 追加資料 {printLayout?.detailCount || 0}ページ</Text>
-                  <Text style={s.hint}>{plan.cardMode === "both" ? `広げて170 × ${printLayout?.height || 135}mm → 二つ折りで85 × ${printLayout?.height || 135}mm。外周の破線は切り取り線、中央の実線は折り線（切らない）です。` : `${printLayout?.width} × ${printLayout?.height}mm。外周の破線が切り取り線です。`}</Text>
+                  <Text style={s.hint}>{plan.cardFormat === "wrist" ? "手首用は各カードの外周を切り取ります。比較と累計時間は別々のカードです。" : plan.cardMode === "both" ? `広げて170 × ${printLayout?.height || 135}mm → 二つ折りで85 × ${printLayout?.height || 135}mm。外周の破線は切り取り線、中央の実線は折り線（切らない）です。` : `${printLayout?.width} × ${printLayout?.height}mm。外周の破線が切り取り線です。`}</Text>
                   <PrintPreview plan={plan} />
                 </Panel>
                 <Button
@@ -1432,7 +1433,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.2.13</Text>
+              <Text style={s.body}>RUN Finish Planner 2.2.14</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary

@@ -589,11 +589,32 @@ test("registered gates stay off the carry card when gate display is disabled", (
   assert.ok(!displayPoints(p).includes(13000000));
   assert.ok(!buildCardHtml(p).includes('<span class="gate-deadline">'));
 });
-test("main and comparison have matching dimensions even for saved wrist setting", () => {
+test("wrist main and comparison are separate cut-out cards on one page", () => {
   const layout = buildPrintLayout(plan({ cardMode: 'both', cardFormat: 'wrist', cardGates: false, cardNotes: false, cardTerrain: false }));
   assert.equal(layout.pages.length, 1);
-  assert.equal(layout.cardCount, 1);
-  assert.ok(layout.pages[0].cards.every(c => c.width === 85 && c.height === 135 && c.points.length === 11));
+  assert.equal(layout.cardCount, 2);
+  assert.ok(!layout.pages[0].folded);
+  assert.deepEqual(layout.pages[0].cards.map(c => c.width), [50,70]);
+  assert.ok(layout.pages[0].cards.every(c => c.height === 180 && c.points.length === 11));
+});
+test('wrist cards keep all marathon points and selected gates, without average or split notes', () => {
+  for (const cardMode of ['single', 'compare', 'both']) {
+    const p = plan({cardFormat:'wrist',cardMode,showGates:true,cardNotes:false,cardTerrain:false,gates:[7.2,13.3,17.1,21.3,28.3,34.3,39.3,42.195].map(km=>gate(km,'16:00'))});
+    const layout=buildPrintLayout(p), html=buildCardHtml(p);
+    assert.equal(layout.pages.length,1);
+    assert.equal(layout.cardCount,cardMode==='both'?2:1);
+    for(const c of layout.pages[0].cards) { assert.equal(c.points.length,18); assert.ok(c.height<=195); }
+    assert.ok(!html.includes('<div class="foot-style">'));
+    assert.ok(!html.includes('<div class="foot-average">'));
+    assert.ok(!html.includes('<div class="fold-card"'));
+    if(cardMode!=='single') for(const name of ['挑戦目標','本命目標','堅実目標']) assert.ok(html.includes(`<th>${name}</th>`));
+  }
+});
+test('wrist print packing never exceeds A4 usable width or loses a point', () => {
+  const p=plan({distance:'100',cardMode:'both',cardFormat:'wrist',cardNotes:false,cardTerrain:false});
+  const layout=buildPrintLayout(p), pages=layout.pages.filter(p=>p.kind==='cards');
+  for(const page of pages) assert.ok(page.cards.reduce((sum,c)=>sum+c.width,0)+8*(page.cards.length-1)<=186);
+  for(const kind of ['single','compare']) assert.deepEqual(pages.flatMap(p=>p.cards).filter(c=>c.kind===kind).flatMap(c=>c.points),displayPoints(p));
 });
 test("gun heading matches finish row with fifteen minute start delay", () => {
   const p = plan({ target: '02:30:00', delayMinutes: '15', cardClock: 'gun', timeBasis: 'net' });
