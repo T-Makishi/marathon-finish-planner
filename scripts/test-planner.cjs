@@ -1017,3 +1017,21 @@ test('unknown and conflicting Okinawa times stay blank, multi-day gates retain d
   console.log(`\n${tests.length - failed}/${tests.length} passed`);
   process.exitCode = failed ? 1 : 0;
 })();
+
+test('continued pocket cards fold in equal-height pairs without losing points', () => {
+  for (const cardMode of ['single', 'compare']) {
+    for (const distance of ['150', '250']) {
+      const p=plan({cardMode,distance,cardFormat:'pocket',cardGates:false,cardNotes:false,cardTerrain:false});
+      const layout=buildPrintLayout(p), pages=layout.pages.filter(p=>p.kind==='cards');
+      assert.deepEqual(pages.flatMap(p=>p.cards.flatMap(c=>c.points)),displayPoints(p));
+      assert.equal(layout.cardCount,pages.length);
+      for (const page of pages) {
+        assert.equal(page.folded,page.cards.length===2);
+        if(page.folded) assert.equal(page.cards[0].height,page.cards[1].height);
+      }
+      const html=buildCardHtml(p);
+      assert.equal((html.match(/class="fold-line"/g)||[]).length,pages.filter(p=>p.folded).length);
+      assert.ok(html.includes('裏面：'+(cardMode==='single'?'本番案':'3目標比較')+' 2/'));
+    }
+  }
+});
