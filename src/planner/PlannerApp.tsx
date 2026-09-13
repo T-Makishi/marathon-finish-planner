@@ -222,6 +222,7 @@ function Messages({
   ) : null;
 }
 function Planner() {
+  const [guideStep, setGuideStep] = useState(0);
   const compactComparison = useWindowDimensions().width < 820;
   const [showOpening, setShowOpening] = useState(true);
   const finishOpening = useCallback(() => setShowOpening(false), []);
@@ -1317,8 +1318,9 @@ function Planner() {
                 <Panel title="3. 印刷される内容を確認">
                   <Text style={s.heading}>A4縦 {printLayout?.pages.length || 0}ページ</Text>
                   <Text style={s.body}>携帯カード {printLayout?.cardCount || 0}枚 ／ 追加資料 {printLayout?.detailCount || 0}ページ</Text>
-                  <Text style={s.hint}>{plan.cardFormat === "wrist" ? "手首用は各カードの外周を切り取ります。比較と累計時間は別々のカードです。" : plan.cardMode === "both" ? `広げて170 × ${printLayout?.height || 135}mm → 二つ折りで85 × ${printLayout?.height || 135}mm。外周の破線は切り取り線、中央の実線は折り線（切らない）です。` : `${printLayout?.width} × ${printLayout?.height}mm。外周の破線が切り取り線です。`}</Text>
+                  <Text style={s.hint}>{plan.cardFormat === "wrist" ? "手首用は各カードの外周を切り取ります。比較と累計時間は別々のカードです。" : printLayout?.pages.some(page => page.kind === "cards" && page.folded) ? `広げて170 × ${printLayout?.height || 135}mm → 二つ折りで85 × ${printLayout?.height || 135}mm。外周の破線は切り取り線、中央の実線は折り線（切らない）です。` : `${printLayout?.width} × ${printLayout?.height}mm。外周の破線が切り取り線です。`}</Text>
                   <PrintPreview plan={plan} />
+                  <Button title="印刷プレビューの使い方" onPress={() => { setGuideStep(2); move("使い方"); }} />
                 </Panel>
                 <Button
                   title={busy ? "準備中…" : `この内容を印刷・PDF・共有（${printLayout?.pages.length || 0}ページ）`}
@@ -1433,7 +1435,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.2.17</Text>
+              <Text style={s.body}>RUN Finish Planner 2.2.18</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary
@@ -1443,7 +1445,7 @@ function Planner() {
             </Panel>
           </>
         )}
-        {tab === "使い方" && <UserGuide onOpen={move} />}
+        {tab === "使い方" && <UserGuide initialStep={guideStep} onOpen={move} />}
         <Text style={s.footer}>PLAN YOUR RACE. RUN YOUR PLAN.</Text>
       </ScrollView>
       <Modal
