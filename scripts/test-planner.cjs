@@ -582,7 +582,7 @@ test("pocket card splits only after the 195mm maximum without dropping points", 
   for (const item of gates) assert.ok(points.includes(Math.round(Number(item.km) * 1e6)));
   assert.ok(layout.cardCount > 1);
   assert.ok(layout.pages.flatMap(page => page.kind === "cards" ? page.cards : []).every(card => card.height <= 195));
-  assert.ok(layout.warnings.some(message => message.includes("複数枚")));
+  assert.ok(layout.warnings.some(message => message.includes("続きの面")));
 });
 test("registered gates stay off the carry card when gate display is disabled", () => {
   const p = plan({ gates: [gate(13, "11:00")], showGates: false, cardGates: false });
