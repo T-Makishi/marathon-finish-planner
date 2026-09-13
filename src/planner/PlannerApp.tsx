@@ -499,29 +499,29 @@ function Planner() {
                     value={raceForm.name}
                     onChange={(v) => editRaceForm("name", v)}
                   />
-                  <View style={s.wrap}>
+                  <View style={compactComparison ? { gap: 16 } : s.wrap}>
                     <DateField
-                      small
+                      small={!compactComparison}
                       label="開催日"
                       value={raceForm.date}
                       onChange={(v) => editRaceForm("date", v)}
                     />
                     <Field
-                      small
+                      small={!compactComparison}
                       label="距離（km）"
                       value={raceForm.distance}
                       onChange={(v) => editRaceForm("distance", v)}
                     />
                   </View>
-                  <View style={s.wrap}>
+                  <View style={compactComparison ? { gap: 16 } : s.wrap}>
                     <Field
-                      small
+                      small={!compactComparison}
                       label="大会号砲（時:分）"
                       value={raceForm.startTime}
                       onChange={(v) => editRaceForm("startTime", v)}
                     />
                     <Field
-                      small
+                      small={!compactComparison}
                       label="完走制限（時:分:秒）"
                       value={raceForm.limit}
                       onChange={(v) => editRaceForm("limit", v)}
@@ -1464,7 +1464,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.2.22</Text>
+              <Text style={s.body}>RUN Finish Planner 2.2.23</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary
@@ -1683,6 +1683,7 @@ const s = StyleSheet.create({
     textAlign: "center",
   },
   choice: {
+    maxWidth: "100%",
     borderWidth: 1,
     borderColor: "#cad8ca",
     paddingHorizontal: 13,

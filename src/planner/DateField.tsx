@@ -56,7 +56,7 @@ export default function DateField({ label, value, onChange, small = false }: {
 }
 const s = StyleSheet.create({
   field: { gap: 7 }, label: { color: '#233e30', fontSize: 14, fontWeight: '600' },
-  input: { minHeight: 48, borderWidth: 1, borderColor: '#c8d4ca', borderRadius: 8, backgroundColor: '#fbfdfa', padding: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  input: { minHeight: 52, borderWidth: 1, borderColor: '#c8d4ca', borderRadius: 8, backgroundColor: '#fbfdfa', padding: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
   value: { color: '#233e30', fontSize: 16, flex: 1 }, icon: { color: '#164d3c', fontSize: 22 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 12 },
   dialog: { width: '100%', maxWidth: 400, maxHeight: '90%', backgroundColor: '#fff', borderRadius: 16 },

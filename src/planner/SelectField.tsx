@@ -6,7 +6,7 @@ export default function SelectField({ label, accessibilityLabel = label, compact
     {label && <Text style={{ color: '#233e30', fontSize: 14, fontWeight: '600' }}>{label}</Text>}
     {Platform.OS === 'web' ? React.createElement('select', {
       'aria-label': accessibilityLabel, value, onChange: (event: React.ChangeEvent<HTMLSelectElement>) => onChange(event.target.value),
-      style: { width: '100%', padding: compact ? 6 : 12, minHeight: 46, fontSize: 16, color: '#233e30', border: '1px solid #c8d4ca', borderRadius: 8, background: '#fff' },
+      style: { width: '100%', padding: compact ? 6 : 12, minHeight: 52, fontSize: 16, color: '#233e30', border: '1px solid #c8d4ca', borderRadius: 8, background: '#fff' },
     }, options.map(option => React.createElement('option', { key: option.value, value: option.value }, option.label))) : <>
       <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)} style={{ padding: 14, borderWidth: 1, borderColor: '#c8d4ca', borderRadius: 8 }}><Text>{options.find(o => o.value === value)?.label}　{open ? '▴' : '▾'}</Text></Pressable>
       {open && <ScrollView nestedScrollEnabled style={{ maxHeight: 240, borderWidth: 1, borderColor: '#c8d4ca', borderRadius: 8 }}>{options.map(option => <Pressable key={option.value} accessibilityRole="radio" accessibilityState={{ checked: value === option.value }} onPress={() => { onChange(option.value); setOpen(false); }} style={{ padding: 14, backgroundColor: value === option.value ? '#e5eee6' : '#fff' }}><Text>{option.label}</Text></Pressable>)}</ScrollView>}
