@@ -820,12 +820,24 @@ test('cleanup failure retains old source and usable current plans retain setting
 test('selected carry-card gates show exact distances and deadlines on both faces', () => {
   const p = plan({ distance: '21.442', target: '2:50:00', timeBasis: 'gun', delayMinutes: '10', cardClock: 'gun', comparison: ['2:40:00','3:00:00','3:10:00'], cardMode: 'both', cardGates: false, showGates: true, gates: [gate(13,'11:00')] });
   const html = buildCardHtml(p);
-  assert.equal((html.match(/class="gate-deadline">関門 11:00/g) || []).length, 2);
+  assert.equal((html.match(/class="deadline-highlight">関門 11:00/g) || []).length, 2);
   assert.equal(displayPoints(p).filter(x => x === 13000000).length, 1);
   assert.ok(html.includes('ネット<br>2:40:00'));
   assert.ok(html.includes('class="finish-pair"'));
   const matching = { ...p, gates: [gate(10,'11:00')] };
   assert.equal(displayPoints(matching).filter(x => x === 10000000).length, 1);
+});
+test('official deadline highlighting survives detail pagination and excludes advisory times', () => {
+  const gates = Array.from({length:30},(_,i)=>gate(i+1,'16:00',i%2?'advisory':'official'));
+  for(const cardFormat of ['pocket','wrist']) {
+    const p=plan({cardFormat,cardMode:'both',showGates:true,cardGates:true,gates,limit:'08:00:00',cardNotes:false,cardTerrain:false});
+    const layout=buildPrintLayout(p), html=buildCardHtml(p);
+    const tables=layout.pages.filter(p=>p.kind==='detail').flatMap(p=>p.tables);
+    assert.ok(tables.length>1);
+    assert.deepEqual(tables.flatMap(t=>t.emphasizeDeadline),[...gates.map(g=>g.kind==='official'),true]);
+    assert.equal((html.match(/class="deadline-highlight">関門 16:00/g)||[]).length,30);
+    assert.equal((html.match(/class="deadline-reference">参考 16:00/g)||[]).length,30);
+  }
 });
 test('saved plans with the retired point-mode property remain readable', () => {
   const existing = newStore();
