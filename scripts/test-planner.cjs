@@ -358,8 +358,10 @@ test("print CSS ends after the last sheet without adding a blank page", () => {
   const onePage = buildCardHtml(plan({ cardMode: "single" }));
   assert.ok(onePage.includes(".sheet:last-of-type{break-after:auto;page-break-after:auto}"));
   assert.ok(!onePage.includes(".sheet:last-child{break-after:auto;page-break-after:auto}"));
-  assert.ok(onePage.includes("@media print{html,body{width:210mm}"));
-  assert.ok(onePage.includes(".sheet{height:296.5mm;margin:0;box-shadow:none;overflow:hidden}"));
+  assert.ok(onePage.includes("@media print{html,body{width:auto;height:auto}"));
+  assert.ok(onePage.includes(".sheet~.sheet{break-before:page;page-break-before:always}"));
+  assert.ok(onePage.includes("height:auto;min-height:0;padding:0;margin:0"));
+  assert.ok(!onePage.includes("height:296.5mm"));
   assert.equal((onePage.match(/<article class=\"sheet\"/g) || []).length, 1);
   const multiPage = buildCardHtml(plan({ cardMode: "both", cardGates: true, gates: [gate(20, "16:00")] }));
   assert.ok((multiPage.match(/<article class=\"sheet\"/g) || []).length > 1);
