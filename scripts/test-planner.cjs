@@ -466,6 +466,7 @@ test("write failure surfaced and earlier copy remains", async () => {
   db.setItem = async () => {
     throw new Error("quota");
   };
+  s.plans[0].name = "quota failure edit";
   await assert.rejects(repo.save(s));
   assert.equal((await repo.load()).store.plans.length, 1);
 });
@@ -513,6 +514,7 @@ test("stale second repository cannot overwrite a newer plan", async () => {
   const stale = (await b.load()).store;
   initial.plans[0].name = "new edit";
   await a.save(initial);
+  stale.plans[0].name = "conflicting edit";
   await assert.rejects(b.save(stale));
   assert.equal((await a.load()).store.plans[0].name, "new edit");
 });
@@ -1036,4 +1038,52 @@ test('continued pocket cards fold in equal-height pairs without losing points', 
       assert.ok(html.includes('裏面：'+(cardMode==='single'?'本番案':'3目標比較')+' 2/'));
     }
   }
+});
+
+ test("unchanged tab does not invalidate another tab or overwrite its additions", async () => {
+  const db = kv(), a = createRepository(db), b = createRepository(db);
+  const original = (await a.load()).store;
+  const other = (await b.load()).store;
+  const before = [...db.map.entries()];
+  await b.save(other);
+  assert.deepEqual([...db.map.entries()], before);
+  original.plans[0].name = 'saved in A';
+  await a.save(original);
+  await b.save(other);
+  let refreshed;
+  await b.refresh(next => { refreshed = next; return b.isSaved(other); });
+  assert.equal(refreshed.plans[0].name, 'saved in A');
+  assert.ok(b.isSaved(refreshed));
+  refreshed.plans[0].name = 'saved in B';
+  await b.save(refreshed);
+  assert.equal((await a.load()).store.plans[0].name, 'saved in B');
+ });
+ test("incoming update cannot replace unsaved edits or authorize a stale save", async () => {
+  const db = kv(), a = createRepository(db), b = createRepository(db);
+  const left = (await a.load()).store, right = (await b.load()).store;
+  left.plans[0].name = 'left edit'; await a.save(left);
+  right.plans[0].name = 'unsaved right';
+  await b.refresh(() => b.isSaved(right));
+  assert.equal(right.plans[0].name, 'unsaved right');
+  await assert.rejects(b.save(right));
+  assert.equal((await a.load()).store.plans[0].name, 'left edit');
+ });
+
+test('deleted plans stay deleted across clean tabs and stale saves', async () => {
+  const db = kv(), a = createRepository(db), b = createRepository(db);
+  const original = (await a.load()).store, stale = (await b.load()).store;
+  const removed = { ...original, plans: [], selectedId: '', trash: original.plans };
+  await a.save(removed);
+  await b.save(stale);
+  let next;
+  await b.refresh(store => { next = store; return true; });
+  assert.equal(next.plans.length, 0);
+  assert.equal(next.trash.length, original.plans.length);
+  await b.purgeTrash(next, next.trash.map(p => p.id));
+  let clean;
+  await a.refresh(store => { clean = store; return true; });
+  assert.equal(clean.plans.length, 0);
+  assert.equal(clean.trash.length, 0);
+  for (const key of ['run-finish-planner-v2-a','run-finish-planner-v2-b'])
+    assert.equal(JSON.parse(JSON.parse(db.map.get(key)).payload).trash.length, 0);
 });

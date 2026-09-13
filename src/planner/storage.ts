@@ -235,6 +235,15 @@ export function parseBackup(text: string): PlannerStore {
 export function createRepository(kv: KV) {
   let queue: Promise<unknown> = Promise.resolve();
   let knownGeneration: number | null = null;
+  let savedPayload: string | null = null;
+  const payloadOf = (store: PlannerStore) => JSON.stringify(compactStore(store));
+  const locked = <T,>(operation: () => Promise<T>): Promise<T> => {
+    const task = queue.catch(() => {}).then(() =>
+      typeof navigator !== 'undefined' && navigator.locks
+        ? navigator.locks.request(PREFIX, operation) : operation());
+    queue = task;
+    return task;
+  };
   async function readSlot(key: string): Promise<Envelope | null> {
     const value = await kv.getItem(key);
     if (!value) return null;
@@ -253,7 +262,8 @@ export function createRepository(kv: KV) {
       return null;
     }
   }
-  const saveNow = async (payload: string) => {
+  const saveNow = async (payload: string, force = false) => {
+    if (!force && payload === savedPayload) return;
     parseStore(payload);
     const [a, b] = await Promise.all([
       readSlot(`${PREFIX}-a`),
@@ -275,12 +285,8 @@ export function createRepository(kv: KV) {
     if ((await kv.getItem(`${PREFIX}-${slot}`)) !== text)
       throw new Error("保存内容を確認できませんでした。");
     knownGeneration = generation;
+    savedPayload = payload;
   };
-  async function finishCleanup(store: PlannerStore, force = false): Promise<PlannerStore> {
-    return typeof navigator !== 'undefined' && navigator.locks
-      ? navigator.locks.request(PREFIX, () => cleanupNow(store, force))
-      : cleanupNow(store, force);
-  }
   async function cleanupNow(store: PlannerStore, force: boolean): Promise<PlannerStore> {
     const clean = compactStore(store);
     const obsolete = [LEGACY_KEY, `${PREFIX}-legacy-original`];
@@ -288,8 +294,8 @@ export function createRepository(kv: KV) {
     const previous = await kv.getItem(`${PREFIX}-before-restore`);
     const changed = JSON.stringify(clean) !== JSON.stringify(store);
     if (force || changed || oldValues.some(Boolean)) {
-      await saveNow(JSON.stringify(clean));
-      await saveNow(JSON.stringify(clean));
+      await saveNow(JSON.stringify(clean), true);
+      await saveNow(JSON.stringify(clean), true);
       if (kv.removeItem) for (const key of obsolete) await kv.removeItem(key);
     }
     if (previous) {
@@ -304,7 +310,8 @@ export function createRepository(kv: KV) {
     return clean;
   }
   return {
-    async load(): Promise<{ store: PlannerStore; notice: string }> {
+    load(): Promise<{ store: PlannerStore; notice: string }> {
+      return locked(async () => {
       const [a, b, rawA, rawB] = await Promise.all([
         readSlot(`${PREFIX}-a`),
         readSlot(`${PREFIX}-b`),
@@ -316,8 +323,9 @@ export function createRepository(kv: KV) {
         .sort((x, y) => y.generation - x.generation)[0];
       if (latest) {
         knownGeneration = latest.generation;
+        savedPayload = latest.payload;
         return {
-          store: await finishCleanup(parseStore(latest.payload), [a, b].some(e => e && JSON.stringify(compactStore(parseStore(e.payload))) !== e.payload)),
+          store: await cleanupNow(parseStore(latest.payload), [a, b].some(e => e && JSON.stringify(compactStore(parseStore(e.payload))) !== e.payload)),
           notice:
             (rawA && !a) || (rawB && !b)
               ? "保存データの予備コピーから回復しました。バックアップを保存してください。"
@@ -331,11 +339,25 @@ export function createRepository(kv: KV) {
       knownGeneration = 0;
       const legacy = await kv.getItem(LEGACY_KEY);
       if (legacy) {
-        return { store: await finishCleanup(migrateLegacy(JSON.parse(legacy))), notice: '' };
+        return { store: await cleanupNow(migrateLegacy(JSON.parse(legacy)), false), notice: '' };
       }
       const store = firstUseStore();
       await saveNow(JSON.stringify(store));
       return { store, notice: "" };
+      });
+    },
+    isSaved(store: PlannerStore): boolean { return payloadOf(store) === savedPayload; },
+    refresh(accept: (store: PlannerStore) => boolean): Promise<void> {
+      return locked(async () => {
+        const slots = await Promise.all([readSlot(`${PREFIX}-a`), readSlot(`${PREFIX}-b`)]);
+        const latest = slots.filter((e): e is Envelope => !!e).sort((a, b) => b.generation - a.generation)[0];
+        if (!latest || latest.generation === knownGeneration) return;
+        // The callback rechecks local edits after the asynchronous reads.
+        if (accept(compactStore(parseStore(latest.payload)))) {
+          knownGeneration = latest.generation;
+          savedPayload = payloadOf(parseStore(latest.payload));
+        }
+      });
     },
     save(store: PlannerStore): Promise<void> {
       const payload = JSON.stringify(compactStore(store));
@@ -362,8 +384,8 @@ export function createRepository(kv: KV) {
           const plans = old.plans.filter(p => !targets.has(p.id));
           trimmed = { ...old, plans, selectedId: plans.some(p => p.id === old.selectedId) ? old.selectedId : plans[0]?.id || "", trash: old.trash.filter(p => !targets.has(p.id)) };
         }
-        await saveNow(JSON.stringify(clean));
-        await saveNow(JSON.stringify(clean));
+        await saveNow(JSON.stringify(clean), true);
+        await saveNow(JSON.stringify(clean), true);
         if (trimmed) {
           const text = JSON.stringify(trimmed);
           await kv.setItem(key, text);

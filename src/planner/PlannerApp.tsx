@@ -255,6 +255,8 @@ function Planner() {
   const [busy, setBusy] = useState(false),
     [undo, setUndo] = useState<Plan | null>(null);
   const purgingTrash = useRef(false);
+  const editingRace = useRef(raceEditingId);
+  editingRace.current = raceEditingId;
   const current = useRef(store),
     scroll = useRef<ScrollView>(null),
     generation = useRef(0);
@@ -271,6 +273,7 @@ function Planner() {
   useEffect(() => {
     if (!store) return;
     const seq = ++generation.current;
+    if (repository.isSaved(store)) { setSaved("端末に保存済み"); return; }
     setSaved("保存中…");
     const timer = setTimeout(() => {
       if (purgingTrash.current || current.current !== store) return;
@@ -288,6 +291,32 @@ function Planner() {
     }, 250);
     return () => clearTimeout(timer);
   }, [store]);
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const refresh = () => {
+      void repository.refresh(next => {
+        const local = current.current;
+        if (!local || purgingTrash.current || editingRace.current || !repository.isSaved(local)) return false;
+        current.current = next;
+        setStore(next);
+        setSaved("端末に保存済み");
+        return true;
+      }).catch(e => setNotice(`別タブの保存内容を確認できませんでした：${e.message}`));
+    };
+    const changed = (event: StorageEvent) => {
+      if (event.key === null || /^run-finish-planner-v2-[ab]$/.test(event.key)) refresh();
+    };
+    const visible = () => { if (document.visibilityState === "visible") refresh(); };
+    window.addEventListener("storage", changed);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", visible);
+    refresh();
+    return () => {
+      window.removeEventListener("storage", changed);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", visible);
+    };
+  }, [raceEditingId]);
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
       if (state !== "active" && current.current && !purgingTrash.current)
@@ -1435,7 +1464,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.2.21</Text>
+              <Text style={s.body}>RUN Finish Planner 2.2.22</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary
