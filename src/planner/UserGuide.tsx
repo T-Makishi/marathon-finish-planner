@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import GuideVideo from './GuideVideo';
 
 const steps = [
   { title: '大会を選ぶ', image: require('../../assets/guide/race.jpg'), alt: '大会画面：大会を選択するボタンと保存済み計画の一覧', body: '「大会を選択する」で大会を探します。初めての方は、保存済みのサンプルを選んで試せます。', tip: '大会の日付・距離・関門は、最新の公式要項で確認してください。', destination: '大会' },
@@ -146,6 +147,7 @@ export default function UserGuide({ onOpen, initialStep = 0 }: { initialStep?: n
   return <View style={s.page}>
     <Text accessibilityRole="header" style={s.title}>使い方</Text>
     <Text style={s.intro}>大会前に計画して、紙のカードを持って走るアプリです。</Text>
+    <GuideVideo />
     <View style={s.flow}>{steps.map((item, i) => <Pressable key={item.title} accessibilityRole="button" accessibilityLabel={`手順${i + 1}：${item.title}`} accessibilityState={{ selected: index === i }} onPress={() => setIndex(i)} style={[s.pill, i === index && s.selected]}><Text style={[s.pillText, i === index && s.white]}>{i + 1} {item.destination}</Text></Pressable>)}</View>
     <View style={s.panel}>
       <Text accessibilityRole="header" style={s.heading}>{index + 1} / 3　{step.title}</Text>

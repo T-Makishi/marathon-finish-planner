@@ -1,6 +1,6 @@
 {
   "name": "marathon-finish-planner",
-  "version": "2.2.23",
+  "version": "2.2.24",
   "private": true,
   "main": "index.js",
   "scripts": {
