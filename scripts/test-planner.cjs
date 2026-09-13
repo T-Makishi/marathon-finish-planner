@@ -354,6 +354,17 @@ test("HTML escapes untrusted titles", () => {
   assert.ok(!html.includes("<img src=x"));
   assert.ok(html.includes("&lt;img"));
 });
+test("print CSS ends after the last sheet without adding a blank page", () => {
+  const onePage = buildCardHtml(plan({ cardMode: "single" }));
+  assert.ok(onePage.includes(".sheet:last-of-type{break-after:auto;page-break-after:auto}"));
+  assert.ok(!onePage.includes(".sheet:last-child{break-after:auto;page-break-after:auto}"));
+  assert.ok(onePage.includes("@media print{html,body{width:210mm}"));
+  assert.ok(onePage.includes(".sheet{height:296.5mm;margin:0;box-shadow:none;overflow:hidden}"));
+  assert.equal((onePage.match(/<article class=\"sheet\"/g) || []).length, 1);
+  const multiPage = buildCardHtml(plan({ cardMode: "both", cardGates: true, gates: [gate(20, "16:00")] }));
+  assert.ok((multiPage.match(/<article class=\"sheet\"/g) || []).length > 1);
+  assert.ok(multiPage.indexOf("</article><script>") > 0);
+});
 test("comparison recalculates every target using common engine", () => {
   const p = plan({ comparison: ["03:20:00", "03:30:00", "03:45:00"] });
   comparisonResults(p).forEach((r, i) =>

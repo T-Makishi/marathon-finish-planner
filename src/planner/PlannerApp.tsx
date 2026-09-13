@@ -1431,7 +1431,7 @@ function Planner() {
                 secondary
                 onPress={() => setShowOpening(true)}
               />
-              <Text style={s.body}>RUN Finish Planner 2.2.10</Text>
+              <Text style={s.body}>RUN Finish Planner 2.2.11</Text>
               <Button
                 title="プライバシー・データの取り扱い"
                 secondary
